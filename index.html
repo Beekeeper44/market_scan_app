@@ -161,11 +161,12 @@ font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom
   <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--soft);white-space:nowrap">
     <input type="checkbox" id="live" checked style="width:auto"> Live prices
   </label>
-  <button class="go" id="notify" type="button" style="background:var(--soft)">Enable alerts</button>
+  <button class="go" id="notify" type="button" style="background:var(--soft)">Also notify on desktop</button>
 </div>
 
 <div class="bar" id="bar"><i id="barfill"></i></div>
-<p class="log" id="log"></p>\n<p class="log" id="source"></p>
+<p class="log" id="log"></p>
+<p class="log" id="source"></p>
 <pre class="log" id="diagout" style="display:none;background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:12px;overflow-x:auto"></pre>
 
 <div class="sidegrid side">
@@ -182,6 +183,14 @@ font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom
   <section class="panel">
     <h3>Scanned today</h3>
     <ul class="quotes" id="scanlist"><li class="hint">Run a scan.</li></ul>
+  </section>
+
+  <section class="panel">
+    <h3>Alerts <span class="tabcount" id="alertcount"></span></h3>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--soft);margin-bottom:8px">
+      <input type="checkbox" id="sound" checked style="width:auto"> Sound
+    </label>
+    <ul class="quotes" id="alertfeed"><li class="hint">No alerts yet.</li></ul>
   </section>
 
   <section class="panel">
@@ -843,6 +852,82 @@ function tfBar(){
 }
 
 
+
+/* --------------------------------------------------------- alert centre */
+let alertLog = [];
+try{ alertLog = JSON.parse(localStorage.getItem("zone-alertlog") || "[]"); }catch(e){ alertLog = []; }
+const saveAlertLog = () => { try{ localStorage.setItem("zone-alertlog", JSON.stringify(alertLog.slice(0,60))); }catch(e){} };
+let unseen = 0;
+const baseTitle = document.title;
+
+function beep(kind){
+  if(!$("sound") || !$("sound").checked) return;
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = kind === "sell" || kind === "protect" ? 420 : 660;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.45);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.5);
+  }catch(e){}
+}
+
+function toast(kind, title, body, symbol){
+  let stack = document.getElementById("toasts");
+  if(!stack){
+    stack = document.createElement("div");
+    stack.id = "toasts";
+    stack.style.cssText = "position:fixed;top:14px;right:14px;z-index:9999;display:flex;" +
+      "flex-direction:column;gap:8px;max-width:340px";
+    document.body.appendChild(stack);
+  }
+  const t = document.createElement("div");
+  const col = COLORS[kind] || COLORS.entry;
+  t.style.cssText = `background:${col};color:#fff;border-radius:10px;padding:12px 14px;` +
+    `box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer;font-size:13.5px`;
+  t.innerHTML = `<div style="font-weight:700;margin-bottom:3px">${title}` +
+    `<span style="float:right;opacity:.75">×</span></div><div style="opacity:.95">${body}</div>`;
+  t.addEventListener("click", e => {
+    t.remove();
+    if(symbol) jumpTo(symbol);
+  });
+  stack.appendChild(t);
+  setTimeout(() => t.remove(), 90000);
+}
+
+function jumpTo(symbol){
+  showTab("results");
+  const card = [...document.querySelectorAll("article.setup")]
+    .find(c => c.dataset.id.split("-")[0] === symbol);
+  if(!card) return;
+  card.scrollIntoView({behavior:"smooth", block:"center"});
+  card.style.transition = "box-shadow .4s";
+  card.style.boxShadow = "0 0 0 3px var(--blue)";
+  setTimeout(() => { card.style.boxShadow = ""; }, 1600);
+}
+
+function paintAlertFeed(){
+  const el = document.getElementById("alertfeed");
+  if(!el) return;
+  if(!alertLog.length){ el.innerHTML = '<li class="hint">No alerts yet. They appear here the moment a level is reached.</li>'; return; }
+  el.innerHTML = alertLog.slice(0,14).map(a =>
+    `<li data-sym="${a.symbol || ""}" style="display:block;border-bottom:1px solid var(--rule);padding:7px 0">` +
+    `<span style="color:${COLORS[a.kind] || COLORS.entry};font-weight:700">${a.title}</span>` +
+    `<span style="float:right;color:var(--soft);font-size:12px">${a.time}</span>` +
+    `<div style="color:var(--soft);font-size:12.5px;margin-top:2px">${a.body}</div></li>`).join("");
+}
+
+function markSeen(){
+  unseen = 0;
+  document.title = baseTitle;
+  const b = document.getElementById("alertcount");
+  if(b){ b.textContent = ""; b.classList.remove("on"); }
+}
+window.addEventListener("focus", markSeen);
+
 /* ---------------------------------------------------------- positions */
 const COLORS = {buy:"#17924c", sell:"#c0392b", protect:"#b4700a", entry:"#1b4fd8"};
 const RULES = {profitPct: 25, protectPct: 5, runupPct: 10};
@@ -863,12 +948,26 @@ async function askNotify(){
   return res === "granted";
 }
 
-function notify(kind, title, body){
+function notify(kind, title, body, symbol){
   const colour = COLORS[kind] || COLORS.entry;
+  const time = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+
+  alertLog.unshift({kind, title, body, symbol, time});
+  saveAlertLog();
+  paintAlertFeed();
+
   banner(title + " — " + body, colour);
+  toast(kind, title, body, symbol);
+  beep(kind);
+
+  unseen++;
+  document.title = "(" + unseen + ") " + title;
+  const b = document.getElementById("alertcount");
+  if(b){ b.textContent = unseen; b.classList.add("on"); }
+
   try{
     if("Notification" in window && Notification.permission === "granted"){
-      new Notification(title, {body, tag: title, icon: undefined});
+      new Notification(title, {body, tag: title});
     }
   }catch(e){}
 }
@@ -938,7 +1037,7 @@ function evaluate(row, price){
   if(state && alertState[sym] !== state){
     alertState[sym] = state;
     saveAlertState();
-    notify(kind, title, body);
+    notify(kind, title, body, sym);
   }else if(!state && alertState[sym]){
     delete alertState[sym];
     saveAlertState();
@@ -1325,6 +1424,11 @@ $("wlinput").addEventListener("keydown", e => {
   if(e.key === "Enter"){ addToWatch($("wlinput").value); $("wlinput").value = ""; }
 });
 
+document.addEventListener("click", e => {
+  const a = e.target.closest("#alertfeed li[data-sym]");
+  if(a && a.dataset.sym) jumpTo(a.dataset.sym);
+});
+
 document.querySelector(".side").addEventListener("click", e => {
   const rm = e.target.closest("button[data-rm]");
   if(rm){
@@ -1381,8 +1485,8 @@ $("go").addEventListener("click", runScan);
 $("live").addEventListener("change", startLive);
 $("notify").addEventListener("click", async () => {
   const ok = await askNotify();
-  $("notify").textContent = ok ? "Alerts on" : "Alerts blocked";
-  $("notify").style.background = ok ? COLORS.buy : COLORS.sell;
+  $("notify").textContent = ok ? "Desktop alerts on" : "Desktop blocked — in-app still works";
+  $("notify").style.background = ok ? COLORS.buy : "var(--soft)";
 });
 
 (function initSide(){
@@ -1391,6 +1495,7 @@ $("notify").addEventListener("click", async () => {
     const o = document.createElement("option"); o.value = t; dl.appendChild(o);
   });
   paintWatchlist();
+  paintAlertFeed();
   loadTrending();
   if(watchlist.length) refreshSidebarQuotes();
   setInterval(() => { if($("live").checked) refreshSidebarQuotes(); }, 90000);
