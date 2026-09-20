@@ -26,6 +26,10 @@ button.go[disabled]{opacity:.55;cursor:default}
 h2{font-size:15px;margin:28px 0 12px;padding-bottom:7px;border-bottom:2px solid var(--ink)}
 .setup{background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--green);border-radius:9px;padding:16px;margin-bottom:18px}
 .setup.watch{border-left-color:var(--soft)}
+.setup.expanded{border-left-width:6px}
+.setup.expanded .split{grid-template-columns:1fr}
+.setup.expanded .scorecard{max-width:320px}
+.tfbar button[aria-pressed="true"]{background:var(--blue)!important;border-color:var(--blue)!important;color:#fff!important}
 .setup header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .setup h3{font-size:22px;margin:0;font-weight:700}
 .kind{color:var(--soft);font-size:13px;margin-left:auto}
@@ -65,6 +69,36 @@ td{padding:8px 10px 8px 0;border-bottom:1px solid var(--rule)}
 .sym{font-weight:700}
 .note{margin-top:28px;border-top:1px solid var(--rule);padding-top:12px;font-size:12.5px;color:var(--soft);max-width:76ch}
 .none{color:var(--soft)}
+.tabs{display:flex;gap:4px;margin:18px 0 16px;border-bottom:2px solid var(--rule)}
+.tabs button{padding:9px 20px;border:none;background:none;color:var(--soft);font:inherit;font-size:14px;
+font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--blue)}
+.tabcount{display:none;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--blue);color:#fff;font-size:12px}
+.tabcount.on{display:inline-block}
+.sidegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:18px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start;margin-top:8px}
+@media (max-width:980px){.layout{grid-template-columns:1fr}}
+
+
+.side .panel{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:14px}
+.side h3{font-size:13px;font-weight:700;margin:0 0 10px;letter-spacing:.01em}
+.addrow{display:flex;gap:6px;margin-bottom:10px}
+.addrow input{flex:1;font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)}
+.addrow button{padding:6px 12px;border:none;border-radius:6px;background:var(--blue);color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.quotes{list-style:none;margin:0;padding:0;font-size:13px}
+.quotes li{display:flex;align-items:baseline;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule)}
+.quotes li:last-child{border-bottom:none}
+.quotes li.hint{color:var(--soft);border:none;display:block}
+.quotes .q-sym{font-weight:700;min-width:64px;cursor:pointer}
+.quotes .q-sym:hover{color:var(--blue)}
+.quotes .q-px{flex:1;text-align:right}
+.quotes .q-ch{min-width:62px;text-align:right;font-size:12.5px}
+.quotes .up{color:var(--green)}
+.quotes .down{color:var(--red)}
+.quotes .q-score{font-size:11px;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--blue);color:#fff}
+.quotes .q-rm{border:none;background:none;color:var(--soft);cursor:pointer;font:inherit;padding:0 2px}
+.quotes .q-rm:hover{color:var(--red)}
+
 </style>
 </head>
 <body>
@@ -72,6 +106,12 @@ td{padding:8px 10px 8px 0;border-bottom:1px solid var(--rule)}
 <h1>Zone Scanner</h1>
 <p class="sub">Real daily bars for stocks and crypto, scored live in this page. Works as a local file or on a public URL.</p>
 
+<nav class="tabs" id="tabs">
+  <button type="button" data-tab="scan" aria-pressed="true">Scan</button>
+  <button type="button" data-tab="results" aria-pressed="false">Results <span class="tabcount" id="rescount"></span></button>
+</nav>
+
+<section id="tab-scan">
 <div class="controls">
   <div>
     <label for="market">Market</label>
@@ -118,13 +158,43 @@ td{padding:8px 10px 8px 0;border-bottom:1px solid var(--rule)}
   </div>
   <button class="go" id="go" type="button">Scan</button>
   <button class="go" id="diag" type="button" style="background:var(--soft)">Test connection</button>
+  <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--soft);white-space:nowrap">
+    <input type="checkbox" id="live" checked style="width:auto"> Live prices
+  </label>
+  <button class="go" id="notify" type="button" style="background:var(--soft)">Enable alerts</button>
 </div>
 
 <div class="bar" id="bar"><i id="barfill"></i></div>
 <p class="log" id="log"></p>\n<p class="log" id="source"></p>
 <pre class="log" id="diagout" style="display:none;background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:12px;overflow-x:auto"></pre>
 
-<div id="results"></div>
+<div class="sidegrid side">
+  <section class="panel">
+    <h3>My watchlist</h3>
+    <div class="addrow">
+      <input id="wlinput" list="wlhints" placeholder="Add symbol" autocomplete="off">
+      <button id="wladd" type="button">Add</button>
+      <datalist id="wlhints"></datalist>
+    </div>
+    <ul class="quotes" id="wllist"><li class="hint">Nothing yet. Add a symbol, or scan and star one.</li></ul>
+  </section>
+
+  <section class="panel">
+    <h3>Scanned today</h3>
+    <ul class="quotes" id="scanlist"><li class="hint">Run a scan.</li></ul>
+  </section>
+
+  <section class="panel">
+    <h3>Trending</h3>
+    <ul class="quotes" id="trendlist"><li class="hint">Loading…</li></ul>
+  </section>
+</div>
+</section>
+
+<section id="tab-results" hidden>
+  <p class="log" id="rsum"></p>
+  <div id="results"></div>
+</section>
 
 <p class="note">Zones are found mechanically from daily bars, so check each chart yourself — the rules will
 sometimes mark a base where your eye would not. A score says how a setup fits the rules, not how it will
@@ -179,6 +249,7 @@ const PUBLIC_RELAYS = [
 
 let ownProxyWorks = null;   // null = untested, true/false once we know
 let relayIdx = 0;
+let cacheHits = 0;
 
 async function tryOwnProxy(url){
   const r = await fetchWithTimeout(OWN_PROXY(url));
@@ -226,16 +297,44 @@ function setSource(label){
   if(el) el.textContent = "Fetching through " + label + ".";
 }
 
+
+/* --------------------------------------------------- local cache of bars */
+const today = new Date().toISOString().slice(0,10);
+
+function cacheGet(sym){
+  try{
+    const raw = localStorage.getItem("bars:" + sym);
+    if(!raw) return null;
+    const o = JSON.parse(raw);
+    if(o.d !== today) return null;
+    return o.b.map(r => ({t:r[0], o:r[1], h:r[2], l:r[3], c:r[4]}));
+  }catch(e){ return null; }
+}
+
+function cachePut(sym, bars){
+  try{
+    const packed = bars.map(b => [b.t, +b.o.toFixed(4), +b.h.toFixed(4), +b.l.toFixed(4), +b.c.toFixed(4)]);
+    localStorage.setItem("bars:" + sym, JSON.stringify({d: today, b: packed}));
+  }catch(e){
+    try{                                  // out of room — drop yesterday's cache and move on
+      Object.keys(localStorage).filter(k => k.startsWith("bars:")).forEach(k => localStorage.removeItem(k));
+    }catch(e2){}
+  }
+}
+
 /* --------------------------------------------------------------- data pull */
 async function getBars(sym){
+  const hit = cacheGet(sym);
+  if(hit && hit.length > 120){ cacheHits++; return hit; }
   const y = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) +
-            "?range=2y&interval=1d";
+            "?range=1y&interval=1d";
   try{
     const bars = parseYahoo(JSON.parse(await relayFetch(y)));
-    if(bars.length > 120) return bars;
+    if(bars.length > 120){ cachePut(sym, bars); return bars; }
   }catch(e){ /* fall through to stooq */ }
   const s = "https://stooq.com/q/d/l/?s=" + sym.toLowerCase().replace(".","-") + ".us&i=d";
   const bars = parseStooq(await relayFetch(s));
+  if(bars.length > 120) cachePut(sym, bars);
   return bars;
 }
 
@@ -247,7 +346,8 @@ function parseYahoo(payload){
   for(let i=0;i<ts.length;i++){
     const o=q.open&&q.open[i], h=q.high&&q.high[i], l=q.low&&q.low[i], c=q.close&&q.close[i];
     if(o==null||h==null||l==null||c==null) continue;
-    out.push({t:new Date(ts[i]*1000).toISOString().slice(0,10), o:+o, h:+h, l:+l, c:+c});
+    const vv = q.volume && q.volume[i];
+    out.push({t:new Date(ts[i]*1000).toISOString().slice(0,10), ts:ts[i], o:+o, h:+h, l:+l, c:+c, v:vv?+vv:0});
   }
   return out;
 }
@@ -261,7 +361,7 @@ function parseStooq(text){
     if(f.length < 5) continue;
     const o=+f[1],h=+f[2],l=+f[3],c=+f[4];
     if([o,h,l,c].some(v=>!isFinite(v))) continue;
-    out.push({t:f[0], o, h, l, c});
+    out.push({t:f[0], ts:Math.floor(new Date(f[0]+"T00:00:00Z").getTime()/1000), o, h, l, c, v:f[5]?+f[5]:0});
   }
   return out.slice(-520);
 }
@@ -392,68 +492,142 @@ function analyze(sym, bars, approachPct){
     const target = nearestTarget(z, zones, bars);
     const s = scoreZone(z, bars, target);
     const row = {symbol:sym, zone:z, ...s, price, distance:Math.max(0,dist), target, bars};
+    const dcand = zones.filter(v=>v.type==="demand"  && v.proximal <= price);
+    const scand = zones.filter(v=>v.type==="supply"  && v.proximal >= price);
+    row.bands = {
+      demand: dcand.length ? dcand.reduce((a,b)=> b.proximal > a.proximal ? b : a) : null,
+      supply: scand.length ? scand.reduce((a,b)=> b.proximal < a.proximal ? b : a) : null,
+    };
     if(!best || row.total>best.total || (row.total===best.total && row.distance<best.distance)) best = row;
   }
   return best;
 }
 
 /* ------------------------------------------------------------------ chart */
-function candleSvg(bars, zone, target, price){
-  const W=900,H=400,PADR=64,PADB=24,PADT=10;
-  const plotW=W-PADR, plotH=H-PADB-PADT;
-  const rows = bars.slice(-CFG.chartCandles);
-  const demand = zone.type==="demand";
-  let vals = rows.map(b=>b.l).concat(rows.map(b=>b.h), [zone.distal, zone.proximal]);
-  if(target) vals.push(target);
-  let lo=Math.min(...vals), hi=Math.max(...vals);
-  const pad=(hi-lo)*0.06 || 1; lo-=pad; hi+=pad;
-  const span=hi-lo, y=v=>PADT+(hi-v)/span*plotH;
-  const step=plotW/Math.max(1,rows.length), cw=Math.max(1.6, step*0.6);
-  const zc = demand ? "#17924c" : "#c0392b";
-  const F='font-family="Archivo,Helvetica,Arial,sans-serif"';
-  const p=[`<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`];
+function candleSvg(bars, row, price, tall, opts){
+  opts = opts || {};
+  const W = 900, H = tall ? 560 : 400;
+  const PADR = 64, PADB = 24, PADT = 10;
+  const plotW = W - PADR, plotH = H - PADB - PADT;
+  const rows = opts.all ? bars.slice(-320) : bars.slice(tall ? -CFG.chartCandles*2 : -CFG.chartCandles);
+  const volH = opts.volume ? Math.round(plotH * 0.18) : 0;
+  const dz = row.bands && row.bands.demand, sz = row.bands && row.bands.supply;
+  const prim = row.zone;
+
+  let vals = rows.map(b=>b.l).concat(rows.map(b=>b.h), [prim.distal, prim.proximal, price]);
+  if(dz) vals.push(dz.proximal, dz.distal);
+  if(sz) vals.push(sz.proximal, sz.distal);
+  if(row.target) vals.push(row.target);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi-lo)*0.06 || 1; lo -= pad; hi += pad;
+  const span = hi-lo, y = v => PADT + (hi-v)/(span)*(plotH - volH);
+  const step = plotW/Math.max(1,rows.length), cw = Math.max(1.6, step*0.6);
+  const F = 'font-family="Archivo,Helvetica,Arial,sans-serif"';
+  const p = [`<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`];
 
   for(let k=0;k<5;k++){
-    const v=lo+span*k/4, gy=y(v);
+    const v = lo+span*k/4, gy = y(v);
     p.push(`<line x1="0" y1="${gy.toFixed(1)}" x2="${plotW}" y2="${gy.toFixed(1)}" stroke="#e8ecf3"/>`);
     p.push(`<text x="${plotW+8}" y="${(gy+4).toFixed(1)}" font-size="12" fill="#6b7a99" ${F}>${v.toFixed(2)}</text>`);
   }
-  const zt=y(Math.max(zone.proximal,zone.distal)), zb=y(Math.min(zone.proximal,zone.distal));
-  const band=Math.max(6, zb-zt);
-  p.push(`<rect x="0" y="${zt.toFixed(1)}" width="${plotW}" height="${band.toFixed(1)}" fill="${zc}" opacity="0.30"/>`);
-  p.push(`<rect x="0" y="${zt.toFixed(1)}" width="${plotW}" height="${band.toFixed(1)}" fill="none" stroke="${zc}" stroke-width="1.6" opacity="0.85"/>`);
-  const label = demand ? "Buy at demand" : "Sell at supply";
-  p.push(`<text x="10" y="${(demand?zb+17:zt-7).toFixed(1)}" font-size="14" font-weight="700" fill="#16233c" ${F}>${label}</text>`);
 
-  if(target){
-    const ty=y(target);
-    p.push(`<line x1="0" y1="${ty.toFixed(1)}" x2="${plotW}" y2="${ty.toFixed(1)}" stroke="#4a5771" stroke-width="1.2" stroke-dasharray="7 5"/>`);
-    p.push(`<text x="10" y="${(ty-6).toFixed(1)}" font-size="13" fill="#4a5771" ${F}>Target ${target.toFixed(2)}</text>`);
+  if(volH){
+    const maxV = Math.max(...rows.map(b=>b.v||0)) || 1;
+    rows.forEach((b,i)=>{
+      const vh = Math.max(0.5, (b.v||0)/maxV*(volH-6));
+      const x = i*step+step/2;
+      p.push(`<rect x="${(x-cw/2).toFixed(1)}" y="${(PADT+plotH-vh).toFixed(1)}" width="${cw.toFixed(1)}" height="${vh.toFixed(1)}" fill="${b.c>=b.o?"#17924c":"#c0392b"}" opacity="0.30"/>`);
+    });
   }
 
-  const baseXs=[];
+  function band(z, kind){
+    if(!z) return;
+    const col = kind === "demand" ? "#17924c" : "#c0392b";
+    const t = y(Math.max(z.proximal, z.distal)), b = y(Math.min(z.proximal, z.distal));
+    const h = Math.max(6, b-t);
+    p.push(`<rect x="0" y="${t.toFixed(1)}" width="${plotW}" height="${h.toFixed(1)}" fill="${col}" opacity="0.28"/>`);
+    p.push(`<rect x="0" y="${t.toFixed(1)}" width="${plotW}" height="${h.toFixed(1)}" fill="none" stroke="${col}" stroke-width="1.6" opacity="0.85"/>`);
+    const label = kind === "demand" ? "Demand " + z.proximal.toFixed(2) : "Supply " + z.proximal.toFixed(2);
+    const ly = kind === "demand" ? b + 16 : t - 6;
+    p.push(`<text x="10" y="${ly.toFixed(1)}" font-size="13" font-weight="700" fill="#16233c" ${F}>${label}</text>`);
+  }
+  band(dz, "demand");
+  band(sz, "supply");
+
+  function tfBand(z, kind, tag){
+    if(!z) return;
+    const col = kind === "demand" ? "#0f6e56" : "#993c1d";
+    const t = y(Math.max(z.proximal, z.distal)), b = y(Math.min(z.proximal, z.distal));
+    const h = Math.max(4, b-t);
+    p.push(`<rect x="0" y="${t.toFixed(1)}" width="${plotW}" height="${h.toFixed(1)}" fill="${col}" opacity="0.14"/>`);
+    p.push(`<rect x="0" y="${t.toFixed(1)}" width="${plotW}" height="${h.toFixed(1)}" fill="none" stroke="${col}" stroke-width="1.4" stroke-dasharray="8 4"/>`);
+    const ly = kind === "demand" ? b + 15 : t - 5;
+    p.push(`<text x="${plotW-8}" y="${ly.toFixed(1)}" font-size="12.5" font-weight="700" fill="${col}" text-anchor="end" ${F}>${tag} ${kind} ${z.proximal.toFixed(2)}</text>`);
+  }
+  if(opts.tfBands){
+    tfBand(opts.tfBands.demand, "demand", opts.tfBands.label);
+    tfBand(opts.tfBands.supply, "supply", opts.tfBands.label);
+  }
+  if(!dz && prim.type === "demand") band(prim, "demand");
+  if(!sz && prim.type === "supply") band(prim, "supply");
+
+  if(row.target && !(prim.type === "demand" ? sz : dz)){
+    const ty = y(row.target);
+    p.push(`<line x1="0" y1="${ty.toFixed(1)}" x2="${plotW}" y2="${ty.toFixed(1)}" stroke="#4a5771" stroke-width="1.2" stroke-dasharray="7 5"/>`);
+    p.push(`<text x="10" y="${(ty-6).toFixed(1)}" font-size="13" fill="#4a5771" ${F}>Target ${row.target.toFixed(2)}</text>`);
+  }
+
+  const baseXs = [];
   rows.forEach((b,i)=>{
-    const x=i*step+step/2, idx=bars.length-rows.length+i;
-    if(idx>=zone.start && idx<=zone.i) baseXs.push(x);
-    const col = b.c>=b.o ? "#17924c" : "#c0392b";
-    p.push(`<line x1="${x.toFixed(1)}" y1="${y(b.h).toFixed(1)}" x2="${x.toFixed(1)}" y2="${y(b.l).toFixed(1)}" stroke="${col}" stroke-width="1.1"/>`);
-    const top=y(Math.max(b.o,b.c)), bot=y(Math.min(b.o,b.c));
-    p.push(`<rect x="${(x-cw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1.2,bot-top).toFixed(1)}" fill="${col}"/>`);
+    const x = i*step+step/2, idx = bars.length-rows.length+i;
+    if(idx >= prim.start && idx <= prim.i) baseXs.push(x);
+    const col = b.c >= b.o ? "#17924c" : "#c0392b";
+    const live = b.partial;
+    p.push(`<line x1="${x.toFixed(1)}" y1="${y(b.h).toFixed(1)}" x2="${x.toFixed(1)}" y2="${y(b.l).toFixed(1)}" stroke="${col}" stroke-width="${live?1.8:1.1}"/>`);
+    const top = y(Math.max(b.o,b.c)), bot = y(Math.min(b.o,b.c));
+    p.push(`<rect x="${(x-cw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1.2,bot-top).toFixed(1)}" fill="${col}"${live?' stroke="#16233c" stroke-width="1"':''}/>`);
   });
   if(baseXs.length){
-    const cx=(Math.min(...baseXs)+Math.max(...baseXs))/2;
-    const rx=Math.max(14,(Math.max(...baseXs)-Math.min(...baseXs))/2+10);
-    p.push(`<ellipse cx="${cx.toFixed(1)}" cy="${((zt+zb)/2).toFixed(1)}" rx="${rx.toFixed(1)}" ry="${(band/2+22).toFixed(1)}" fill="none" stroke="#16233c" stroke-width="2"/>`);
+    const cx = (Math.min(...baseXs)+Math.max(...baseXs))/2;
+    const rx = Math.max(14,(Math.max(...baseXs)-Math.min(...baseXs))/2+10);
+    const pt = y(Math.max(prim.proximal,prim.distal)), pb = y(Math.min(prim.proximal,prim.distal));
+    p.push(`<ellipse cx="${cx.toFixed(1)}" cy="${((pt+pb)/2).toFixed(1)}" rx="${rx.toFixed(1)}" ry="${((pb-pt)/2+22).toFixed(1)}" fill="none" stroke="#16233c" stroke-width="2"/>`);
   }
-  const py=y(price);
+
+  const pos = positions[row.symbol];
+  if(pos && pos.entry > 0){
+    const marks = [
+      {v: pos.entry, c: COLORS.entry, t: "Bought " + pos.entry.toFixed(2), dash: "0"},
+      {v: pos.entry * (1 + RULES.protectPct/100), c: COLORS.protect,
+       t: "Protect " + (pos.entry*(1+RULES.protectPct/100)).toFixed(2), dash: "6 4"},
+      {v: pos.entry * (1 + RULES.profitPct/100), c: COLORS.buy,
+       t: "+" + RULES.profitPct + "% " + (pos.entry*(1+RULES.profitPct/100)).toFixed(2), dash: "6 4"},
+    ];
+    marks.forEach(m => {
+      if(m.v < lo || m.v > hi) return;
+      const my = y(m.v);
+      p.push(`<line x1="0" y1="${my.toFixed(1)}" x2="${plotW}" y2="${my.toFixed(1)}" stroke="${m.c}" stroke-width="1.4" stroke-dasharray="${m.dash}"/>`);
+      p.push(`<text x="${plotW/2}" y="${(my-5).toFixed(1)}" font-size="12" font-weight="700" fill="${m.c}" text-anchor="middle" ${F}>${m.t}</text>`);
+    });
+  }
+
+  const py = y(price);
+  p.push(`<line x1="0" y1="${py.toFixed(1)}" x2="${plotW}" y2="${py.toFixed(1)}" stroke="#16233c" stroke-width="0.8" stroke-dasharray="2 3" opacity="0.6"/>`);
   p.push(`<rect x="${plotW+2}" y="${(py-9).toFixed(1)}" width="60" height="18" fill="#16233c"/>`);
   p.push(`<text x="${plotW+7}" y="${(py+4).toFixed(1)}" font-size="11.5" fill="#ffffff" ${F}>${price.toFixed(2)}</text>`);
+
   for(let k=0;k<4;k++){
-    const i=Math.min(Math.round(rows.length*k/3), rows.length-1);
-    const x=i*step+step/2, anchor = k===0?"start":k===3?"end":"middle";
-    p.push(`<text x="${x.toFixed(1)}" y="${H-7}" font-size="11.5" fill="#6b7a99" text-anchor="${anchor}" ${F}>${rows[i].t.slice(5)}</text>`);
+    const i = Math.min(Math.round(rows.length*k/3), rows.length-1);
+    const x = i*step+step/2, anchor = k===0?"start":k===3?"end":"middle";
+    p.push(`<text x="${x.toFixed(1)}" y="${H-7}" font-size="11.5" fill="#6b7a99" text-anchor="${anchor}" ${F}>${barLabel(rows[i], !!opts.intraday)}</text>`);
   }
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="daily candles with the zone drawn across">${p.join("")}</svg>`;
+  const geom = {lo, hi, span, padT:PADT, plotH: plotH - volH, step, W, H, plotW, n: rows.length};
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" ` +
+         `aria-label="candles with demand and supply bands" data-geom='${JSON.stringify(geom)}'>` +
+         p.join("") +
+         `<g class="xhair" style="display:none"><line class="xh-v" y1="0" y2="${H-PADB}" stroke="#16233c" stroke-width="0.8" stroke-dasharray="3 3"/>` +
+         `<line class="xh-h" x1="0" x2="${plotW}" stroke="#16233c" stroke-width="0.8" stroke-dasharray="3 3"/></g>` +
+         `<rect class="xhit" x="0" y="0" width="${plotW}" height="${H-PADB}" fill="transparent"/></svg>`;
 }
 
 /* ------------------------------------------------------------------- cards */
@@ -471,7 +645,7 @@ function cardHtml(row, minScore){
   return `<article class="setup ${passed?"pass":"watch"}" data-id="${row.symbol}-${z.date}">
   <header><h3>${row.symbol}</h3><span class="kind">${z.type[0].toUpperCase()+z.type.slice(1)} zone · daily</span></header>
   <div class="split">
-    <div class="chart">${candleSvg(row.bars, z, row.target, row.price)}</div>
+    <div class="chart">${candleSvg(row.bars, row, row.price, false)}</div>
     <div class="scorecard ${passed?"":"fail"}">
       <p class="sc-title">Scorecard</p>
       <p class="sc-num">${row.total}</p>
@@ -515,6 +689,460 @@ function attachMarks(scope){
   });
 }
 
+
+
+/* ------------------------------------------------------- intraday series */
+const TFS = [
+  {id:"1d",  label:"1D",  range:"1d",  interval:"5m",  intraday:true},
+  {id:"5d",  label:"5D",  range:"5d",  interval:"15m", intraday:true},
+  {id:"1mo", label:"1M",  range:"1mo", interval:"1h",  intraday:true},
+  {id:"3mo", label:"3M",  range:"3mo", interval:"1d",  intraday:false},
+  {id:"1y",  label:"1Y",  range:"1y",  interval:"1d",  intraday:false},
+];
+const seriesCache = new Map();
+
+async function loadSeries(sym, tf){
+  const key = sym + "|" + tf.id;
+  const hit = seriesCache.get(key);
+  if(hit && Date.now() - hit.at < 25000) return hit.bars;
+  const url = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) +
+              "?range=" + tf.range + "&interval=" + tf.interval;
+  const bars = parseYahoo(JSON.parse(await relayFetch(url)));
+  seriesCache.set(key, {at: Date.now(), bars});
+  return bars;
+}
+
+function barLabel(b, intraday){
+  if(!intraday) return b.t.slice(5);
+  const d = new Date((b.ts || 0) * 1000);
+  return d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+}
+
+
+/* --------------------------------------------------- crosshair + readout */
+function attachCrosshair(chartEl, bars, intraday){
+  const svg = chartEl.querySelector("svg");
+  if(!svg) return;
+  let geom;
+  try{ geom = JSON.parse(svg.dataset.geom); }catch(e){ return; }
+  const rows = bars.slice(-geom.n);
+  const hit = svg.querySelector(".xhit");
+  const grp = svg.querySelector(".xhair");
+  const vline = svg.querySelector(".xh-v");
+  const hline = svg.querySelector(".xh-h");
+  let out = chartEl.parentElement.querySelector(".readout");
+  if(!out){
+    out = document.createElement("div");
+    out.className = "readout";
+    out.style.cssText = "font-size:12.5px;color:var(--soft);padding:6px 2px 0;min-height:19px;font-variant-numeric:tabular-nums";
+    chartEl.parentElement.insertBefore(out, chartEl.nextSibling);
+  }
+  function at(evt){
+    const r = svg.getBoundingClientRect();
+    const sx = (evt.clientX - r.left) / r.width * geom.W;
+    const sy = (evt.clientY - r.top) / r.height * geom.H;
+    const i = Math.max(0, Math.min(rows.length-1, Math.floor(sx / geom.step)));
+    const b = rows[i];
+    if(!b) return;
+    const px = i*geom.step + geom.step/2;
+    vline.setAttribute("x1", px); vline.setAttribute("x2", px);
+    hline.setAttribute("y1", sy); hline.setAttribute("y2", sy);
+    grp.style.display = "";
+    const atPrice = geom.hi - (sy - geom.padT)/geom.plotH*geom.span;
+    const when = intraday
+      ? new Date((b.ts||0)*1000).toLocaleString([], {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"})
+      : b.t;
+    out.textContent = `${when}   O ${b.o.toFixed(2)}  H ${b.h.toFixed(2)}  L ${b.l.toFixed(2)}  C ${b.c.toFixed(2)}` +
+      (b.v ? `  vol ${b.v.toLocaleString()}` : "") + `   —   cursor ${atPrice.toFixed(2)}`;
+  }
+  hit.addEventListener("mousemove", at);
+  hit.addEventListener("mouseleave", () => { grp.style.display = "none"; out.textContent = ""; });
+}
+
+/* --------------------------------------------------- timeframe switching */
+function zonesForSeries(bars, price){
+  const zs = findZones(bars);
+  const dc = zs.filter(z => z.type === "demand" && z.proximal <= price);
+  const sc = zs.filter(z => z.type === "supply" && z.proximal >= price);
+  const pick = {
+    demand: dc.length ? dc.reduce((a,b) => b.proximal > a.proximal ? b : a) : null,
+    supply: sc.length ? sc.reduce((a,b) => b.proximal < a.proximal ? b : a) : null,
+  };
+  const scored = z => {
+    if(!z) return null;
+    const target = nearestTarget(z, zs, bars);
+    const s = scoreZone(z, bars, target);
+    return {zone:z, total:s.total, parts:s.parts, rr:s.rr, target};
+  };
+  return {demand: pick.demand, supply: pick.supply,
+          dScore: scored(pick.demand), sScore: scored(pick.supply), all: zs};
+}
+
+async function drawTF(card, tfId){
+  const row = liveRows.get(card.dataset.id);
+  if(!row) return;
+  const tf = TFS.find(t => t.id === tfId) || TFS[0];
+  const chart = card.querySelector(".chart");
+  card.querySelectorAll(".tfbar button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.tf === tf.id)));
+  chart.style.opacity = "0.55";
+  try{
+    const bars = await loadSeries(row.symbol, tf);
+    if(!bars.length) throw new Error("no data");
+    const last = bars[bars.length-1];
+    if(last) { last.partial = tf.intraday; }
+    card.dataset.tf = tf.id;
+    const px = last ? last.c : row.price;
+    const tfz = bars.length > 60 ? zonesForSeries(bars, px) : null;
+    chart.innerHTML = candleSvg(bars, row, px, true,
+      {volume:true, intraday:tf.intraday, all:true,
+       tfBands: tfz ? {demand: tfz.demand, supply: tfz.supply, label: tf.label} : null});
+    attachCrosshair(chart, bars, tf.intraday);
+
+    let info = card.querySelector(".tfinfo");
+    if(!info){
+      info = document.createElement("div");
+      info.className = "tfinfo";
+      info.style.cssText = "font-size:13px;color:var(--soft);padding:8px 2px 0;display:flex;gap:16px;flex-wrap:wrap";
+      card.querySelector(".tfbar").insertAdjacentElement("afterend", info);
+    }
+    if(tfz && (tfz.demand || tfz.supply)){
+      const bits = [];
+      if(tfz.dScore){
+        const d = tfz.dScore, gap = (px - d.zone.proximal)/px*100;
+        bits.push(`<span><b style="color:var(--green)">${tf.label} demand</b> ${d.zone.proximal.toFixed(2)}–${d.zone.distal.toFixed(2)} · ${d.total}/10 · ${gap.toFixed(1)}% below`);
+      }
+      if(tfz.sScore){
+        const v = tfz.sScore, gap = (v.zone.proximal - px)/px*100;
+        bits.push(`<span><b style="color:var(--red)">${tf.label} supply</b> ${v.zone.proximal.toFixed(2)}–${v.zone.distal.toFixed(2)} · ${v.total}/10 · ${gap.toFixed(1)}% above`);
+      }
+      info.innerHTML = bits.join("") + `<span style="opacity:.75">Solid bands are the daily zones · dashed are ${tf.label}</span>`;
+    }else{
+      info.textContent = "No clean zone on this timeframe — the solid bands are the daily ones.";
+    }
+  }catch(e){
+    chart.insertAdjacentHTML("beforeend",
+      `<p class="meta">Couldn't load ${tf.label} — ${e.message}</p>`);
+  }
+  chart.style.opacity = "1";
+}
+
+function tfBar(){
+  const bar = document.createElement("div");
+  bar.className = "tfbar";
+  bar.style.cssText = "display:flex;gap:6px;margin:10px 0 0;flex-wrap:wrap";
+  TFS.forEach(tf => {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.tf = tf.id; b.textContent = tf.label;
+    b.setAttribute("aria-pressed", "false");
+    b.style.cssText = "padding:5px 12px;border:1px solid var(--rule);background:var(--paper);" +
+      "color:var(--soft);border-radius:999px;font:inherit;font-size:13px;font-weight:600;cursor:pointer";
+    bar.appendChild(b);
+  });
+  return bar;
+}
+
+
+/* ---------------------------------------------------------- positions */
+const COLORS = {buy:"#17924c", sell:"#c0392b", protect:"#b4700a", entry:"#1b4fd8"};
+const RULES = {profitPct: 25, protectPct: 5, runupPct: 10};
+
+let positions = {};
+try{ positions = JSON.parse(localStorage.getItem("zone-positions") || "{}"); }catch(e){ positions = {}; }
+const savePositions = () => { try{ localStorage.setItem("zone-positions", JSON.stringify(positions)); }catch(e){} };
+
+let alertState = {};
+try{ alertState = JSON.parse(localStorage.getItem("zone-alertstate") || "{}"); }catch(e){ alertState = {}; }
+const saveAlertState = () => { try{ localStorage.setItem("zone-alertstate", JSON.stringify(alertState)); }catch(e){} };
+
+async function askNotify(){
+  if(!("Notification" in window)) return false;
+  if(Notification.permission === "granted") return true;
+  if(Notification.permission === "denied") return false;
+  const res = await Notification.requestPermission();
+  return res === "granted";
+}
+
+function notify(kind, title, body){
+  const colour = COLORS[kind] || COLORS.entry;
+  banner(title + " — " + body, colour);
+  try{
+    if("Notification" in window && Notification.permission === "granted"){
+      new Notification(title, {body, tag: title, icon: undefined});
+    }
+  }catch(e){}
+}
+
+function banner(text, colour){
+  let el = document.getElementById("banner");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "banner";
+    el.style.cssText = "position:sticky;top:0;z-index:50;padding:10px 14px;border-radius:8px;" +
+      "color:#fff;font-weight:600;font-size:14px;margin:0 0 12px;display:none";
+    const anchor = document.getElementById("tabs");
+    document.querySelector(".wrap").insertBefore(el, anchor);
+  }
+  el.style.background = colour;
+  el.textContent = text;
+  el.style.display = "block";
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = "none"; }, 30000);
+}
+
+/* one evaluation per symbol per refresh; fires only when the state changes */
+function evaluate(row, price){
+  const sym = row.symbol, pos = positions[sym];
+  const dz = row.bands && row.bands.demand, sz = row.bands && row.bands.supply;
+  let state = null, kind = "entry", title = "", body = "";
+
+  if(pos && pos.entry > 0){
+    pos.peak = Math.max(pos.peak || pos.entry, price);
+    const gain = (price - pos.entry) / pos.entry * 100;
+    const ranUp = (pos.peak - pos.entry) / pos.entry * 100 >= RULES.runupPct;
+    const protectAt = pos.entry * (1 + RULES.protectPct/100);
+    const targetAt = pos.entry * (1 + RULES.profitPct/100);
+
+    if(sz && price >= sz.proximal){
+      state = "at-supply"; kind = "sell";
+      title = sym + " reached supply " + sz.proximal.toFixed(2);
+      body = `You're up ${gain.toFixed(1)}% from ${pos.entry.toFixed(2)}. This is the level you planned to sell into.`;
+    }else if(price >= targetAt){
+      state = "target"; kind = "buy";
+      title = sym + " is up " + gain.toFixed(1) + "%";
+      body = `Past your ${RULES.profitPct}% mark (${targetAt.toFixed(2)}) from an entry of ${pos.entry.toFixed(2)}.`;
+    }else if(price <= pos.entry){
+      state = "at-cost"; kind = "sell";
+      title = sym + " is back at your cost";
+      body = `${price.toFixed(2)} against an entry of ${pos.entry.toFixed(2)}. Peak was ${pos.peak.toFixed(2)}.`;
+    }else if(ranUp && price <= protectAt){
+      state = "protect"; kind = "protect";
+      title = sym + " falling back toward your entry";
+      body = `${price.toFixed(2)} is within ${RULES.protectPct}% of your ${pos.entry.toFixed(2)} cost, after peaking at ${pos.peak.toFixed(2)}. Exiting here still leaves you above cost.`;
+    }
+    savePositions();
+  }else{
+    const inDemand = dz && price <= dz.proximal && price >= dz.distal;
+    const inSupply = sz && price >= sz.proximal && price <= sz.distal;
+    if(inDemand){
+      state = "in-demand"; kind = "buy";
+      title = sym + " is in the demand zone";
+      body = `${price.toFixed(2)} · zone ${dz.proximal.toFixed(2)}–${dz.distal.toFixed(2)} · scored ${row.total}/10. Check the chart before buying.`;
+    }else if(inSupply){
+      state = "in-supply"; kind = "sell";
+      title = sym + " is in the supply zone";
+      body = `${price.toFixed(2)} · zone ${sz.proximal.toFixed(2)}–${sz.distal.toFixed(2)}. This is where sellers showed up last time.`;
+    }
+  }
+
+  if(state && alertState[sym] !== state){
+    alertState[sym] = state;
+    saveAlertState();
+    notify(kind, title, body);
+  }else if(!state && alertState[sym]){
+    delete alertState[sym];
+    saveAlertState();
+  }
+  return state;
+}
+
+function positionRow(card, row){
+  let box = card.querySelector(".posbox");
+  if(box) return box;
+  box = document.createElement("div");
+  box.className = "posbox";
+  box.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 0;" +
+    "padding:10px;border:1px solid var(--rule);border-radius:8px;font-size:13px";
+  const pos = positions[row.symbol];
+  box.innerHTML =
+    `<span style="color:var(--soft)">Bought at</span>` +
+    `<input class="posentry" type="number" step="0.01" inputmode="decimal" value="${pos ? pos.entry : ""}" ` +
+    `placeholder="0.00" style="width:92px;font:inherit;padding:5px 7px;border:1px solid var(--rule);` +
+    `border-radius:6px;background:var(--paper);color:var(--ink)">` +
+    `<button class="possave" type="button" style="padding:6px 12px;border:none;border-radius:6px;` +
+    `background:${COLORS.entry};color:#fff;font:inherit;font-weight:600;cursor:pointer">Track</button>` +
+    `<button class="posclear" type="button" style="padding:6px 10px;border:1px solid var(--rule);` +
+    `border-radius:6px;background:none;color:var(--soft);font:inherit;cursor:pointer">Clear</button>` +
+    `<span class="posinfo" style="color:var(--soft);flex:1"></span>`;
+  card.appendChild(box);
+
+  box.querySelector(".possave").addEventListener("click", async e => {
+    e.stopPropagation();
+    const v = parseFloat(box.querySelector(".posentry").value);
+    if(!isFinite(v) || v <= 0) return;
+    positions[row.symbol] = {entry:v, peak:Math.max(v, row.price), at:new Date().toISOString().slice(0,10)};
+    delete alertState[row.symbol];
+    savePositions(); saveAlertState();
+    await askNotify();
+    paintPosInfo(card, row);
+    refreshOne(card.dataset.id);
+  });
+  box.querySelector(".posclear").addEventListener("click", e => {
+    e.stopPropagation();
+    delete positions[row.symbol]; delete alertState[row.symbol];
+    savePositions(); saveAlertState();
+    box.querySelector(".posentry").value = "";
+    paintPosInfo(card, row);
+    refreshOne(card.dataset.id);
+  });
+  box.addEventListener("click", e => e.stopPropagation());
+  return box;
+}
+
+function paintPosInfo(card, row){
+  const box = card.querySelector(".posbox");
+  if(!box) return;
+  const info = box.querySelector(".posinfo");
+  const pos = positions[row.symbol];
+  if(!pos){ info.textContent = "Not tracking a position."; return; }
+  const gain = (row.price - pos.entry)/pos.entry*100;
+  const protectAt = pos.entry * (1 + RULES.protectPct/100);
+  const targetAt = pos.entry * (1 + RULES.profitPct/100);
+  const col = gain >= 0 ? COLORS.buy : COLORS.sell;
+  info.innerHTML = `<b style="color:${col}">${gain >= 0 ? "+" : ""}${gain.toFixed(1)}%</b> ` +
+    `· protect ${protectAt.toFixed(2)} · target ${targetAt.toFixed(2)} · peak ${(pos.peak||pos.entry).toFixed(2)}`;
+}
+
+/* ------------------------------------------------------ click to expand */
+function attachExpand(scope){
+  scope.querySelectorAll("article.setup").forEach(card => {
+    const head = card.querySelector("header");
+    const hint = document.createElement("span");
+    hint.className = "expandhint";
+    hint.textContent = "Click for live view";
+    hint.style.cssText = "font-size:12px;color:var(--soft);cursor:pointer";
+    head.appendChild(hint);
+
+    const toggle = () => {
+      const open = card.classList.toggle("expanded");
+      hint.textContent = open ? "Close live view" : "Click for live view";
+      const row = liveRows.get(card.dataset.id);
+      let bar = card.querySelector(".tfbar");
+      if(open){
+        if(!bar){
+          bar = tfBar();
+          bar.addEventListener("click", e => {
+            const b = e.target.closest("button[data-tf]");
+            if(b){ e.stopPropagation(); drawTF(card, b.dataset.tf); }
+          });
+          card.querySelector(".split").insertAdjacentElement("afterend", bar);
+        }
+        bar.style.display = "flex";
+        drawTF(card, card.dataset.tf || "5d");
+      }else{
+        if(bar) bar.style.display = "none";
+        const ro = card.querySelector(".readout");
+        if(ro) ro.textContent = "";
+        card.dataset.tf = "";
+        if(row) card.querySelector(".chart").innerHTML = candleSvg(row.bars, row, row.price, false);
+      }
+    };
+    head.addEventListener("click", e => { if(!e.target.closest("button")) toggle(); });
+    card.querySelector(".chart").addEventListener("click", toggle);
+    card.querySelector(".chart").style.cursor = "pointer";
+    const row0 = liveRows.get(card.dataset.id);
+    if(row0){ positionRow(card, row0); paintPosInfo(card, row0); }
+  });
+}
+
+/* ------------------------------------------------------- live price feed */
+let liveTimer = null;
+let tick = 0;
+const liveRows = new Map();        // symbol -> row object currently on screen
+
+async function intradayBar(sym){
+  const url = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) +
+              "?range=1d&interval=5m";
+  const payload = JSON.parse(await relayFetch(url));
+  const res = payload && payload.chart && payload.chart.result && payload.chart.result[0];
+  if(!res) return null;
+  const meta = res.meta || {};
+  const q = (res.indicators && res.indicators.quote && res.indicators.quote[0]) || {};
+  const ts = res.timestamp || [];
+  const o=[],h=[],l=[],c=[];
+  for(let i=0;i<ts.length;i++){
+    if(q.open[i]==null||q.high[i]==null||q.low[i]==null||q.close[i]==null) continue;
+    o.push(q.open[i]); h.push(q.high[i]); l.push(q.low[i]); c.push(q.close[i]);
+  }
+  const price = meta.regularMarketPrice != null ? +meta.regularMarketPrice : (c.length ? c[c.length-1] : null);
+  if(price == null) return null;
+  const day = ts.length ? new Date(ts[0]*1000).toISOString().slice(0,10) : today;
+  if(!o.length) return {t:day, o:price, h:price, l:price, c:price, price, partial:true};
+  return {t:day, o:o[0], h:Math.max(...h), l:Math.min(...l), c:price, price, partial:true};
+}
+
+async function refreshOne(id){
+  const row = liveRows.get(id);
+  if(!row) return;
+  const stamp = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  {
+    const sym = row.symbol;
+    try{
+      const bar = await intradayBar(sym);
+      if(!bar) return;
+      const bars = row.bars.slice();
+      if(bars[bars.length-1].t === bar.t) bars[bars.length-1] = bar; else bars.push(bar);
+      row.bars = bars;
+      row.price = bar.price;
+      const z = row.zone, demand = z.type === "demand";
+      row.distance = demand ? Math.max(0,(row.price - z.proximal)/row.price*100)
+                            : Math.max(0,(z.proximal - row.price)/row.price*100);
+      const inZone = demand ? (row.price <= z.proximal && row.price >= z.distal)
+                            : (row.price >= z.proximal && row.price <= z.distal);
+      const card = document.querySelector(`article[data-id="${row.symbol}-${z.date}"]`);
+      if(!card) return;
+      if(card.classList.contains("expanded") && card.dataset.tf){
+        seriesCache.delete(row.symbol + "|" + card.dataset.tf);
+        drawTF(card, card.dataset.tf);
+      }else{
+        card.querySelector(".chart").innerHTML = candleSvg(row.bars, row, row.price, false);
+      }
+      const dd = card.querySelectorAll(".levels dd");
+      if(dd[0]) dd[0].textContent = row.price.toFixed(2);
+      if(dd[5]) dd[5].textContent = row.distance.toFixed(1) + "%";
+      const st = evaluate(row, row.price);
+      paintPosInfo(card, row);
+      let pill = card.querySelector(".livepill");
+      if(!pill){
+        pill = document.createElement("span");
+        pill.className = "livepill";
+        card.querySelector("header").insertBefore(pill, card.querySelector(".kind"));
+      }
+      const LABEL = {"in-demand":"BUY ZONE", "in-supply":"SELL AT SUPPLY", "at-supply":"SELL AT SUPPLY",
+                     "target":"+" + RULES.profitPct + "% TARGET", "protect":"PROTECT — NEAR COST",
+                     "at-cost":"AT YOUR COST"};
+      const TINT  = {"in-demand":COLORS.buy, "in-supply":COLORS.sell, "at-supply":COLORS.sell,
+                     "target":COLORS.buy, "protect":COLORS.protect, "at-cost":COLORS.sell};
+      pill.textContent = (st ? LABEL[st] + " " : row.distance.toFixed(1) + "% away ") + "· " + stamp;
+      pill.style.cssText = "font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;color:#fff;" +
+        "background:" + (st ? TINT[st] : "var(--soft)");
+    }catch(e){ /* one symbol failing shouldn't stop the rest */ }
+  }
+}
+
+async function refreshLive(){
+  if(!$("live").checked || !liveRows.size) return;
+  const ids = [...liveRows.keys()];
+  const expanded = ids.filter(id => {
+    const c = document.querySelector(`article[data-id="${id}"]`);
+    return c && c.classList.contains("expanded");
+  });
+  // an opened card refreshes every tick; the rest every other tick
+  tick++;
+  const due = expanded.length ? expanded.concat(tick % 2 === 0 ? ids.filter(i => !expanded.includes(i)) : []) : ids;
+  for(const id of due){
+    await refreshOne(id);
+    await new Promise(r => setTimeout(r, 350));
+  }
+}
+
+function startLive(){
+  if(liveTimer) clearInterval(liveTimer);
+  if(!$("live").checked) return;
+  refreshLive();
+  liveTimer = setInterval(refreshLive, 30000);
+}
+
 /* -------------------------------------------------------------------- scan */
 const $ = id => document.getElementById(id);
 
@@ -530,7 +1158,11 @@ async function runScan(){
   $("go").disabled = true;
   $("bar").classList.add("on");
   $("results").innerHTML = "";
+  const dg = document.getElementById("diagout");
+  if(dg){ dg.style.display = "none"; dg.textContent = ""; }
   let done=0, failed=0;
+  cacheHits = 0;
+  const started = Date.now();
   const rows=[];
 
   const queue = syms.slice();
@@ -544,11 +1176,18 @@ async function runScan(){
       }catch(e){ failed++; }
       done++;
       $("barfill").style.width = (done/syms.length*100).toFixed(1)+"%";
+      const secs = (Date.now()-started)/1000;
+      const rate = done/Math.max(1,secs);
+      const left = Math.round((syms.length-done)/Math.max(0.05,rate));
       $("log").textContent = `${done} of ${syms.length} pulled · ${rows.length} with a live zone` +
-        (failed ? ` · ${failed} unavailable` : "");
+        (cacheHits ? ` · ${cacheHits} from cache` : "") +
+        (failed ? ` · ${failed} unavailable` : "") +
+        (done < syms.length ? ` · about ${left}s left` : "");
     }
   }
-  await Promise.all(Array.from({length:CFG.concurrency}, worker));
+  // own proxy can take more parallel load than a public relay
+  const workers = ownProxyWorks === true ? 10 : CFG.concurrency;
+  await Promise.all(Array.from({length:workers}, worker));
 
   $("bar").classList.remove("on");
   $("go").disabled = false;
@@ -575,10 +1214,187 @@ async function runScan(){
   }
   $("results").innerHTML = html.join("");
   attachMarks($("results"));
+  attachExpand($("results"));
+  liveRows.clear();
+  hits.forEach(r => liveRows.set(r.symbol + "-" + r.zone.date, r));
+  paintScanList(hits);
+  refreshSidebarQuotes();
+  startLive();
+  const badge = $("rescount");
+  badge.textContent = hits.length;
+  badge.classList.toggle("on", hits.length > 0);
+  $("rsum").textContent = `${done} scanned · ${hits.length} at ${minScore}+ · ` +
+    `${market === "crypto" ? "crypto" : market === "both" ? "stocks and crypto" : "S&P 500"} · ` +
+    new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  if(hits.length) showTab("results");
   $("log").textContent = `${done} scanned · ${rows.length} with a live zone · ${rows.filter(r=>r.total>=minScore).length} at ${minScore}+` + (failed?` · ${failed} unavailable`:"");
 }
 
+
+/* ------------------------------------------------------------ side panel */
+let watchlist = [];
+try{ watchlist = JSON.parse(localStorage.getItem("zone-watchlist") || "[]"); }catch(e){ watchlist = []; }
+const saveWatch = () => { try{ localStorage.setItem("zone-watchlist", JSON.stringify(watchlist)); }catch(e){} };
+const quotes = new Map();          // symbol -> {price, chg, pct}
+
+async function quoteFor(sym){
+  const url = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) +
+              "?range=1d&interval=5m";
+  const payload = JSON.parse(await relayFetch(url));
+  const res = payload && payload.chart && payload.chart.result && payload.chart.result[0];
+  if(!res) return null;
+  const m = res.meta || {};
+  const price = m.regularMarketPrice != null ? +m.regularMarketPrice : null;
+  const prev = m.chartPreviousClose != null ? +m.chartPreviousClose
+             : (m.previousClose != null ? +m.previousClose : null);
+  if(price == null) return null;
+  const chg = prev != null ? price - prev : null;
+  return {price, chg, pct: (chg != null && prev) ? chg/prev*100 : null};
+}
+
+function quoteRow(sym, extra){
+  const q = quotes.get(sym);
+  const dir = q && q.chg != null ? (q.chg >= 0 ? "up" : "down") : "";
+  const px = q ? q.price.toFixed(2) : "—";
+  const ch = q && q.pct != null ? (q.chg >= 0 ? "+" : "") + q.pct.toFixed(2) + "%" : "";
+  return `<li data-sym="${sym}">` +
+    `<span class="q-sym">${sym}</span>` +
+    (extra || "") +
+    `<span class="q-px">${px}</span>` +
+    `<span class="q-ch ${dir}">${ch}</span>` +
+    (extra === undefined ? `<button class="q-rm" data-rm="${sym}" title="Remove">×</button>` : "") +
+    `</li>`;
+}
+
+function paintWatchlist(){
+  const el = $("wllist");
+  el.innerHTML = watchlist.length
+    ? watchlist.map(s => quoteRow(s)).join("")
+    : '<li class="hint">Nothing yet. Add a symbol, or scan and star one.</li>';
+}
+
+function paintScanList(rows){
+  const el = $("scanlist");
+  if(!rows || !rows.length){ el.innerHTML = '<li class="hint">Run a scan.</li>'; return; }
+  el.innerHTML = rows.slice(0, 12).map(r =>
+    quoteRow(r.symbol, `<span class="q-score">${r.total}</span>`)).join("");
+}
+
+async function loadTrending(){
+  const el = $("trendlist");
+  try{
+    const payload = JSON.parse(await relayFetch(
+      "https://query1.finance.yahoo.com/v1/finance/trending/US?count=8"));
+    const list = ((payload.finance && payload.finance.result) || [{}])[0].quotes || [];
+    const syms = list.map(q => q.symbol).filter(Boolean).slice(0, 8);
+    if(!syms.length){ el.innerHTML = '<li class="hint">Nothing returned.</li>'; return; }
+    el.innerHTML = syms.map(s => quoteRow(s, "")).join("");
+    for(const s of syms){
+      try{ const q = await quoteFor(s); if(q) quotes.set(s, q); }catch(e){}
+      await new Promise(r => setTimeout(r, 250));
+    }
+    el.innerHTML = syms.map(s => quoteRow(s, "")).join("");
+  }catch(e){
+    el.innerHTML = '<li class="hint">Couldn\'t load trending.</li>';
+  }
+}
+
+async function refreshSidebarQuotes(){
+  const syms = [...new Set(watchlist.concat(
+    [...$("scanlist").querySelectorAll("li[data-sym]")].map(li => li.dataset.sym)))];
+  for(const s of syms){
+    try{ const q = await quoteFor(s); if(q) quotes.set(s, q); }catch(e){}
+    await new Promise(r => setTimeout(r, 200));
+  }
+  paintWatchlist();
+  const rows = [...liveRows.values()];
+  paintScanList(rows);
+}
+
+function addToWatch(sym){
+  sym = (sym || "").trim().toUpperCase();
+  if(!sym || watchlist.includes(sym)) return;
+  watchlist.push(sym);
+  saveWatch();
+  paintWatchlist();
+  quoteFor(sym).then(q => { if(q){ quotes.set(sym, q); paintWatchlist(); } }).catch(()=>{});
+}
+
+$("wladd").addEventListener("click", () => { addToWatch($("wlinput").value); $("wlinput").value = ""; });
+$("wlinput").addEventListener("keydown", e => {
+  if(e.key === "Enter"){ addToWatch($("wlinput").value); $("wlinput").value = ""; }
+});
+
+document.querySelector(".side").addEventListener("click", e => {
+  const rm = e.target.closest("button[data-rm]");
+  if(rm){
+    watchlist = watchlist.filter(s => s !== rm.dataset.rm);
+    saveWatch(); paintWatchlist(); return;
+  }
+  const sym = e.target.closest(".q-sym");
+  if(!sym) return;
+  const symbol = sym.closest("li").dataset.sym;
+  const card = [...document.querySelectorAll("article.setup")]
+    .find(c => c.dataset.id.split("-")[0] === symbol);
+  if(card){
+    card.scrollIntoView({behavior:"smooth", block:"center"});
+    card.style.transition = "box-shadow .4s";
+    card.style.boxShadow = "0 0 0 3px var(--blue)";
+    setTimeout(() => { card.style.boxShadow = ""; }, 1400);
+  }else{
+    scanOne(symbol);
+  }
+});
+
+async function scanOne(sym){
+  const log = $("log");
+  log.textContent = "Scanning " + sym + "…";
+  try{
+    const bars = await getBars(sym);
+    const row = analyze(sym, bars, +$("approach").value || 100);
+    if(!row){ log.textContent = sym + " has no live zone within range right now."; return; }
+    liveRows.set(row.symbol + "-" + row.zone.date, row);
+    $("results").insertAdjacentHTML("afterbegin", cardHtml(row, +$("minScore").value));
+    showTab("results");
+    attachMarks($("results"));
+    attachExpand($("results"));
+    log.textContent = sym + " added — scored " + row.total + "/10.";
+    refreshOne(row.symbol + "-" + row.zone.date);
+  }catch(e){
+    log.textContent = "Couldn't load " + sym + " — " + e.message;
+  }
+}
+
+function showTab(name){
+  document.querySelectorAll("#tabs button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.tab === name)));
+  $("tab-scan").hidden = name !== "scan";
+  $("tab-results").hidden = name !== "results";
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+$("tabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tab]");
+  if(b) showTab(b.dataset.tab);
+});
+
 $("go").addEventListener("click", runScan);
+$("live").addEventListener("change", startLive);
+$("notify").addEventListener("click", async () => {
+  const ok = await askNotify();
+  $("notify").textContent = ok ? "Alerts on" : "Alerts blocked";
+  $("notify").style.background = ok ? COLORS.buy : COLORS.sell;
+});
+
+(function initSide(){
+  const dl = $("wlhints");
+  if(dl) TICKERS.concat(CRYPTO).forEach(t => {
+    const o = document.createElement("option"); o.value = t; dl.appendChild(o);
+  });
+  paintWatchlist();
+  loadTrending();
+  if(watchlist.length) refreshSidebarQuotes();
+  setInterval(() => { if($("live").checked) refreshSidebarQuotes(); }, 90000);
+})();
 
 /* ------------------------------------------------------- connection test */
 async function testConnections(){
