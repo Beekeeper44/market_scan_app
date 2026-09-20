@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "headers": [
+    {
+      "source": "/api/quote",
+      "headers": [{ "key": "Cache-Control", "value": "public, s-maxage=900" }]
+    }
+  ]
+}

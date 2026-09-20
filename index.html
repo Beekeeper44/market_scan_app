@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zone Scanner — live</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--paper:#EEF1F6;--card:#fff;--ink:#0F1A2E;--soft:#4A5771;--rule:#D3DAE6;--green:#0F8A43;--red:#C22A2A;--blue:#1B4FD8}
+@media (prefers-color-scheme:dark){:root{--paper:#0C1220;--card:#141D30;--ink:#E8EDF7;--soft:#97A3BC;--rule:#26314A;--green:#3FB56E;--red:#EF5B5B;--blue:#6C90F5}}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 Archivo,"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 18px 70px}
+h1{font-size:clamp(24px,5vw,34px);letter-spacing:-.02em;margin:0 0 2px}
+.sub{color:var(--soft);font-size:13.5px;margin:0 0 18px}
+.controls{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:16px;display:grid;
+grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;align-items:end}
+label{display:block;font-size:12px;color:var(--soft);margin-bottom:4px}
+select,input{width:100%;font:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink)}
+button.go{grid-column:span 1;padding:10px;border:none;border-radius:7px;background:var(--blue);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+button.go[disabled]{opacity:.55;cursor:default}
+.bar{height:5px;background:var(--rule);border-radius:3px;overflow:hidden;margin:16px 0 6px;display:none}
+.bar.on{display:block}
+.bar i{display:block;height:100%;width:0;background:var(--blue);transition:width .2s}
+.log{font-size:12.5px;color:var(--soft);min-height:18px;white-space:pre-wrap}
+h2{font-size:15px;margin:28px 0 12px;padding-bottom:7px;border-bottom:2px solid var(--ink)}
+.setup{background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--green);border-radius:9px;padding:16px;margin-bottom:18px}
+.setup.watch{border-left-color:var(--soft)}
+.setup header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.setup h3{font-size:22px;margin:0;font-weight:700}
+.kind{color:var(--soft);font-size:13px;margin-left:auto}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 232px;gap:14px;align-items:start}
+@media (max-width:760px){.split{grid-template-columns:1fr}}
+.chart{border:1px solid var(--rule);border-radius:6px;overflow:hidden;background:#fff}
+.scorecard{border-radius:8px;padding:16px 14px 12px;color:#fff;background:linear-gradient(160deg,#2bb463,#0a6b34)}
+.scorecard.fail{background:linear-gradient(160deg,#d9534f,#8e1b1b)}
+.sc-title{font-size:19px;font-weight:700;text-align:center;margin:0}
+.sc-num{font-size:52px;font-weight:700;line-height:1;text-align:center;color:#FFD34D;margin:4px 0 0}
+.sc-out{text-align:center;font-size:11.5px;opacity:.85;margin:2px 0 0}
+.sc-verdict{text-align:center;font-weight:700;letter-spacing:.06em;font-size:14px;color:#FFD34D;margin:6px 0 0}
+.sc-entry{text-align:center;font-size:12.5px;margin:6px 0 10px}
+.sc-entry b{color:#FFD34D}
+.lines{list-style:none;margin:0;padding:0;font-size:13.5px}
+.lines li{display:flex;align-items:baseline;gap:8px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.16)}
+.lines .n{flex:1}
+.lines .v{color:#FFD34D;font-weight:700;min-width:14px;text-align:right}
+.lines .m{opacity:.72;min-width:20px;text-align:right}
+.sc-foot{text-align:center;font-weight:700;letter-spacing:.07em;font-size:11px;margin:10px 0 0}
+.levels{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px;margin:14px 0 0}
+.levels dt{font-size:11.5px;color:var(--soft)}
+.levels dd{margin:1px 0 0;font-size:15px;font-weight:600}
+.why{margin:12px 0 0;font-size:13px}
+.why summary{cursor:pointer;color:var(--soft)}
+.why ul{list-style:none;margin:8px 0 0;padding:0}
+.why li{display:flex;gap:10px;padding:3px 0;border-bottom:1px solid var(--rule)}
+.why li span:first-child{min-width:92px;font-weight:600}
+.why li span:last-child{color:var(--soft)}
+.meta{color:var(--soft);font-size:12.5px;margin:12px 0 0}
+.status{display:flex;gap:7px;margin:14px 0 0;flex-wrap:wrap}
+.status button{flex:1;min-width:84px;padding:8px 6px;border:1px solid var(--rule);background:var(--paper);color:var(--soft);border-radius:7px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.status button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;font-size:11.5px;color:var(--soft);padding:0 10px 7px 0;border-bottom:1px solid var(--rule)}
+td{padding:8px 10px 8px 0;border-bottom:1px solid var(--rule)}
+.sym{font-weight:700}
+.note{margin-top:28px;border-top:1px solid var(--rule);padding-top:12px;font-size:12.5px;color:var(--soft);max-width:76ch}
+.none{color:var(--soft)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Zone Scanner</h1>
+<p class="sub">Real daily bars for stocks and crypto, scored live in this page. Works as a local file or on a public URL.</p>
+
+<div class="controls">
+  <div>
+    <label for="market">Market</label>
+    <select id="market">
+      <option value="stocks" selected>S&amp;P 500</option>
+      <option value="crypto">Crypto</option>
+      <option value="both">Both</option>
+    </select>
+  </div>
+  <div>
+    <label for="universe">Universe</label>
+    <select id="universe">
+      <option value="25">25 largest</option>
+      <option value="50" selected>50 largest</option>
+      <option value="100">100 largest</option>
+      <option value="150">150 names</option>
+      <option value="999">Everything</option>
+    </select>
+  </div>
+  <div>
+    <label for="minScore">Minimum score</label>
+    <select id="minScore">
+      <option value="9">9</option>
+      <option value="8" selected>8</option>
+      <option value="7">7</option>
+      <option value="6">6</option>
+    </select>
+  </div>
+  <div>
+    <label for="topN">Show</label>
+    <select id="topN">
+      <option value="5" selected>Top 5</option>
+      <option value="10">Top 10</option>
+      <option value="0">All that qualify</option>
+    </select>
+  </div>
+  <div>
+    <label for="approach">Within % of zone</label>
+    <select id="approach">
+      <option value="5">5%</option>
+      <option value="8" selected>8%</option>
+      <option value="15">15%</option>
+    </select>
+  </div>
+  <button class="go" id="go" type="button">Scan</button>
+  <button class="go" id="diag" type="button" style="background:var(--soft)">Test connection</button>
+</div>
+
+<div class="bar" id="bar"><i id="barfill"></i></div>
+<p class="log" id="log"></p>\n<p class="log" id="source"></p>
+<pre class="log" id="diagout" style="display:none;background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:12px;overflow-x:auto"></pre>
+
+<div id="results"></div>
+
+<p class="note">Zones are found mechanically from daily bars, so check each chart yourself — the rules will
+sometimes mark a base where your eye would not. A score says how a setup fits the rules, not how it will
+perform. Data comes from public sources through a relay and can be delayed, revised, or wrong; verify prices
+with your broker before acting. This is a worksheet, not advice, and not a recommendation of any security.</p>
+</div>
+
+<script>
+/* ---------------------------------------------------------------- universe */
+const TICKERS = ("NVDA MSFT AAPL AMZN GOOGL META AVGO TSLA BRK-B LLY JPM V UNH XOM MA COST HD PG JNJ WMT " +
+"NFLX ABBV BAC CRM ORCL CVX MRK KO AMD PEP TMO ADBE LIN CSCO ACN MCD ABT PM DHR WFC IBM GE TXN NOW QCOM " +
+"CAT DIS VZ INTU AMGN CMCSA PFE UNP AXP SPGI ISRG GS RTX MS T LOW BKNG HON ELV BLK SYK PLD TJX VRTX MDT " +
+"PGR C SCHW LMT ADP BSX MMC CB DE ADI AMT REGN MU ETN SBUX CI GILD KLAC PANW SO BA ZTS DUK ANET APH CME " +
+"ICE EQIX SNPS MO CDNS ITW SHW WM PYPL MCK CMG NKE TGT FDX ORLY AON PSA CL MSI EOG NOC APD MAR EMR ROP " +
+"MCO AJG HCA NSC PCAR TT ECL SPG AZO CARR TDG PH SLB GD AFL FTNT MPC PSX VLO OXY HLT F GM DAL UAL EBAY " +
+"DASH ABNB COIN PLTR UBER LRCX AMAT MRVL SMCI CRWD DDOG SNOW NET").split(" ");
+
+
+const CRYPTO = ("BTC-USD ETH-USD XRP-USD BNB-USD SOL-USD DOGE-USD ADA-USD TRX-USD LINK-USD AVAX-USD " +
+"TON-USD DOT-USD BCH-USD LTC-USD SUI-USD NEAR-USD UNI-USD APT-USD ICP-USD ATOM-USD XLM-USD HBAR-USD " +
+"ETC-USD FIL-USD ARB-USD OP-USD INJ-USD IMX-USD STX-USD TIA-USD RENDER-USD SEI-USD AAVE-USD MKR-USD " +
+"GRT-USD ALGO-USD VET-USD SAND-USD MANA-USD AXS-USD CRV-USD LDO-USD SHIB-USD PEPE-USD POL-USD").split(" ");
+
+
+/* every network call gets a deadline — a hung relay must report, not hang forever */
+async function fetchWithTimeout(url, ms){
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms || 12000);
+  try{
+    return await fetch(url, {cache:"no-store", signal: ctl.signal});
+  }catch(e){
+    throw (e.name === "AbortError") ? new Error("timed out after " + ((ms||12000)/1000) + "s") : e;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+/* ------------------------------------------------------------------ config */
+const CFG = {maxBase:6, minDepartureATR:1.0, minBodyRatio:0.60, maxBaseBody:0.50,
+             chartCandles:130, concurrency:4};
+
+/* How the page gets around the browser's cross-site rule.
+   First choice is your own proxy at /api/quote — present when this folder is
+   deployed to Vercel. If it isn't there (opened as a local file, or hosted
+   somewhere static), it falls back to public relays automatically. */
+const OWN_PROXY = u => "/api/quote?url=" + encodeURIComponent(u);
+const PUBLIC_RELAYS = [
+  u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+  u => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u),
+  u => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+];
+
+let ownProxyWorks = null;   // null = untested, true/false once we know
+let relayIdx = 0;
+
+async function tryOwnProxy(url){
+  const r = await fetchWithTimeout(OWN_PROXY(url));
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  const text = await r.text();
+  if(!text || text.length < 50) throw new Error("empty body");
+  return text;
+}
+
+async function relayFetch(url){
+  if(ownProxyWorks !== false && location.protocol.startsWith("http")){
+    try{
+      const text = await tryOwnProxy(url);
+      if(ownProxyWorks === null){
+        ownProxyWorks = true;
+        setSource("your own proxy");
+      }
+      return text;
+    }catch(e){
+      if(ownProxyWorks === null){
+        ownProxyWorks = false;    // not deployed with the function — use relays
+        setSource("a public relay");
+      } else if(ownProxyWorks === true){
+        throw e;                  // proxy exists but this symbol failed
+      }
+    }
+  }
+  let lastErr;
+  for(let i=0;i<PUBLIC_RELAYS.length;i++){
+    const idx = (relayIdx + i) % PUBLIC_RELAYS.length;
+    try{
+      const r = await fetchWithTimeout(PUBLIC_RELAYS[idx](url));
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      const text = await r.text();
+      if(!text || text.length < 50) throw new Error("empty body");
+      relayIdx = idx;             // stick with whichever one worked
+      return text;
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("all relays failed");
+}
+
+function setSource(label){
+  const el = document.getElementById("source");
+  if(el) el.textContent = "Fetching through " + label + ".";
+}
+
+/* --------------------------------------------------------------- data pull */
+async function getBars(sym){
+  const y = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) +
+            "?range=2y&interval=1d";
+  try{
+    const bars = parseYahoo(JSON.parse(await relayFetch(y)));
+    if(bars.length > 120) return bars;
+  }catch(e){ /* fall through to stooq */ }
+  const s = "https://stooq.com/q/d/l/?s=" + sym.toLowerCase().replace(".","-") + ".us&i=d";
+  const bars = parseStooq(await relayFetch(s));
+  return bars;
+}
+
+function parseYahoo(payload){
+  const res = payload && payload.chart && payload.chart.result && payload.chart.result[0];
+  if(!res) return [];
+  const ts = res.timestamp || [], q = (res.indicators && res.indicators.quote && res.indicators.quote[0]) || {};
+  const out = [];
+  for(let i=0;i<ts.length;i++){
+    const o=q.open&&q.open[i], h=q.high&&q.high[i], l=q.low&&q.low[i], c=q.close&&q.close[i];
+    if(o==null||h==null||l==null||c==null) continue;
+    out.push({t:new Date(ts[i]*1000).toISOString().slice(0,10), o:+o, h:+h, l:+l, c:+c});
+  }
+  return out;
+}
+
+function parseStooq(text){
+  const lines = text.trim().split(/\r?\n/);
+  if(lines.length < 30 || !/^date/i.test(lines[0])) return [];
+  const out = [];
+  for(let i=1;i<lines.length;i++){
+    const f = lines[i].split(",");
+    if(f.length < 5) continue;
+    const o=+f[1],h=+f[2],l=+f[3],c=+f[4];
+    if([o,h,l,c].some(v=>!isFinite(v))) continue;
+    out.push({t:f[0], o, h, l, c});
+  }
+  return out.slice(-520);
+}
+
+/* -------------------------------------------------------------- indicators */
+function sma(v,n){ return v.length<n ? null : v.slice(-n).reduce((a,b)=>a+b,0)/n; }
+
+function atrSeries(bars,n){
+  n = n||14; const trs=[], out=new Array(bars.length).fill(null);
+  bars.forEach((b,i)=>{
+    const tr = i===0 ? b.h-b.l
+      : Math.max(b.h-b.l, Math.abs(b.h-bars[i-1].c), Math.abs(b.l-bars[i-1].c));
+    trs.push(tr);
+    if(i>=n-1) out[i] = trs.slice(i-n+1,i+1).reduce((a,b)=>a+b,0)/n;
+  });
+  return out;
+}
+
+const bodyRatio = b => (b.h-b.l) <= 0 ? 1 : Math.abs(b.c-b.o)/(b.h-b.l);
+
+/* ------------------------------------------------------------------- zones */
+function findZones(bars){
+  const atr = atrSeries(bars), zones = [], n = bars.length;
+  for(let i=20;i<n-2;i++){
+    const a = atr[i]; if(!a||a<=0) continue;
+    const b = bars[i], rng = b.h-b.l;
+    if(rng < CFG.minDepartureATR*a || bodyRatio(b) < CFG.minBodyRatio) continue;
+    const up = b.c > b.o;
+
+    const base = []; let j = i-1;
+    while(j>=1 && base.length<CFG.maxBase && bodyRatio(bars[j])<=CFG.maxBaseBody){ base.push(bars[j]); j--; }
+    if(!base.length) continue;
+    base.reverse();
+    const start = j+1;
+
+    const proximal = up ? Math.max(...base.map(x=>x.h)) : Math.min(...base.map(x=>x.l));
+    const distal   = up ? Math.min(...base.map(x=>x.l)) : Math.max(...base.map(x=>x.h));
+    const height = Math.abs(proximal-distal); if(height<=0) continue;
+
+    const win = bars.slice(i, Math.min(i+4,n));
+    const extent = up ? Math.max(...win.map(x=>x.h))-proximal : proximal-Math.min(...win.map(x=>x.l));
+    if(extent<=0) continue;
+
+    const after = bars.slice(i+1);
+    const broken = up ? after.some(x=>x.c<distal) : after.some(x=>x.c>distal);
+    if(broken) continue;
+
+    let touches=0, inside=false;
+    for(const x of after){
+      const hit = up ? x.l<=proximal : x.h>=proximal;
+      if(hit && !inside){ touches++; inside=true; } else if(!hit) inside=false;
+    }
+    zones.push({type: up?"demand":"supply", i, start, proximal, distal, height,
+                baseLen:base.length, extentRatio:extent/height, extentATR:extent/a,
+                touches, date:bars[i].t});
+  }
+  return zones;
+}
+
+function nearestTarget(zone, zones, bars){
+  const demand = zone.type==="demand";
+  const opp = zones.filter(z=>z.type!==zone.type);
+  const win = bars.slice(-252);
+  if(demand){
+    const above = opp.filter(z=>z.distal>zone.proximal).map(z=>z.distal);
+    return above.length ? Math.min(...above) : Math.max(...win.map(b=>b.h));
+  }
+  const below = opp.filter(z=>z.distal<zone.proximal).map(z=>z.distal);
+  return below.length ? Math.max(...below) : Math.min(...win.map(b=>b.l));
+}
+
+/* ----------------------------------------------------------------- scoring */
+const LINES = [["strength","Strength",2],["time","Time",1],["freshness","Freshness",2],
+               ["trend","Trend",2],["curve","Curve",1],["profit","Profit zone",2]];
+
+function scoreZone(zone, bars, target){
+  const closes = bars.map(b=>b.c), price = closes[closes.length-1];
+  const s50 = sma(closes,50), s200 = sma(closes,200);
+  const demand = zone.type==="demand";
+  const parts = {}, why = {};
+
+  const er = zone.extentRatio;
+  parts.strength = er>=3 ? 2 : er>=1.5 ? 1 : 0;
+  why.strength = "departure ran " + er.toFixed(1) + "x the zone height (" + zone.extentATR.toFixed(1) + " ATR)";
+
+  parts.time = zone.baseLen<=3 ? 1 : 0;
+  why.time = zone.baseLen + " candle base";
+
+  parts.freshness = zone.touches===0 ? 2 : zone.touches===1 ? 1 : 0;
+  why.freshness = zone.touches===0 ? "untouched" : zone.touches + " retest" + (zone.touches===1?"":"s");
+
+  if(s50 && s200){
+    const aligned = demand ? (price>s50 && s50>s200) : (price<s50 && s50<s200);
+    const partial = demand ? (price>s200 || s50>s200) : (price<s200 || s50<s200);
+    parts.trend = aligned ? 2 : partial ? 1 : 0;
+    why.trend = "price " + (price>s50?"above":"below") + " 50sma " + (s50>s200?"above":"below") + " 200sma";
+  } else { parts.trend = 1; why.trend = "not enough history for the 200sma"; }
+
+  const win = bars.length>=252 ? bars.slice(-252) : bars;
+  const hi = Math.max(...win.map(b=>b.h)), lo = Math.min(...win.map(b=>b.l));
+  const pos = hi>lo ? (zone.proximal-lo)/(hi-lo) : 0.5;
+  parts.curve = (demand ? pos<=0.34 : pos>=0.66) ? 1 : 0;
+  why.curve = "zone sits at " + Math.round(pos*100) + "% of the 52w range";
+
+  let rr = null;
+  if(target && zone.height>0){
+    const reward = demand ? target-zone.proximal : zone.proximal-target;
+    if(reward>0) rr = reward/zone.height;
+  }
+  if(rr===null){ parts.profit=0; why.profit="no opposing zone found"; }
+  else { parts.profit = rr>=3?2:rr>=2?1:0; why.profit = rr.toFixed(1)+":1 to the opposing zone"; }
+
+  return {parts, why, rr, total:Object.values(parts).reduce((a,b)=>a+b,0)};
+}
+
+function analyze(sym, bars, approachPct){
+  if(bars.length < 120) return null;
+  const price = bars[bars.length-1].c;
+  const zones = findZones(bars);
+  if(!zones.length) return null;
+  let best = null;
+  for(const z of zones){
+    const demand = z.type==="demand";
+    let dist;
+    if(demand){ if(price < z.distal) continue; dist = (price-z.proximal)/price*100; }
+    else      { if(price > z.distal) continue; dist = (z.proximal-price)/price*100; }
+    if(dist > approachPct) continue;
+    const target = nearestTarget(z, zones, bars);
+    const s = scoreZone(z, bars, target);
+    const row = {symbol:sym, zone:z, ...s, price, distance:Math.max(0,dist), target, bars};
+    if(!best || row.total>best.total || (row.total===best.total && row.distance<best.distance)) best = row;
+  }
+  return best;
+}
+
+/* ------------------------------------------------------------------ chart */
+function candleSvg(bars, zone, target, price){
+  const W=900,H=400,PADR=64,PADB=24,PADT=10;
+  const plotW=W-PADR, plotH=H-PADB-PADT;
+  const rows = bars.slice(-CFG.chartCandles);
+  const demand = zone.type==="demand";
+  let vals = rows.map(b=>b.l).concat(rows.map(b=>b.h), [zone.distal, zone.proximal]);
+  if(target) vals.push(target);
+  let lo=Math.min(...vals), hi=Math.max(...vals);
+  const pad=(hi-lo)*0.06 || 1; lo-=pad; hi+=pad;
+  const span=hi-lo, y=v=>PADT+(hi-v)/span*plotH;
+  const step=plotW/Math.max(1,rows.length), cw=Math.max(1.6, step*0.6);
+  const zc = demand ? "#17924c" : "#c0392b";
+  const F='font-family="Archivo,Helvetica,Arial,sans-serif"';
+  const p=[`<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`];
+
+  for(let k=0;k<5;k++){
+    const v=lo+span*k/4, gy=y(v);
+    p.push(`<line x1="0" y1="${gy.toFixed(1)}" x2="${plotW}" y2="${gy.toFixed(1)}" stroke="#e8ecf3"/>`);
+    p.push(`<text x="${plotW+8}" y="${(gy+4).toFixed(1)}" font-size="12" fill="#6b7a99" ${F}>${v.toFixed(2)}</text>`);
+  }
+  const zt=y(Math.max(zone.proximal,zone.distal)), zb=y(Math.min(zone.proximal,zone.distal));
+  const band=Math.max(6, zb-zt);
+  p.push(`<rect x="0" y="${zt.toFixed(1)}" width="${plotW}" height="${band.toFixed(1)}" fill="${zc}" opacity="0.30"/>`);
+  p.push(`<rect x="0" y="${zt.toFixed(1)}" width="${plotW}" height="${band.toFixed(1)}" fill="none" stroke="${zc}" stroke-width="1.6" opacity="0.85"/>`);
+  const label = demand ? "Buy at demand" : "Sell at supply";
+  p.push(`<text x="10" y="${(demand?zb+17:zt-7).toFixed(1)}" font-size="14" font-weight="700" fill="#16233c" ${F}>${label}</text>`);
+
+  if(target){
+    const ty=y(target);
+    p.push(`<line x1="0" y1="${ty.toFixed(1)}" x2="${plotW}" y2="${ty.toFixed(1)}" stroke="#4a5771" stroke-width="1.2" stroke-dasharray="7 5"/>`);
+    p.push(`<text x="10" y="${(ty-6).toFixed(1)}" font-size="13" fill="#4a5771" ${F}>Target ${target.toFixed(2)}</text>`);
+  }
+
+  const baseXs=[];
+  rows.forEach((b,i)=>{
+    const x=i*step+step/2, idx=bars.length-rows.length+i;
+    if(idx>=zone.start && idx<=zone.i) baseXs.push(x);
+    const col = b.c>=b.o ? "#17924c" : "#c0392b";
+    p.push(`<line x1="${x.toFixed(1)}" y1="${y(b.h).toFixed(1)}" x2="${x.toFixed(1)}" y2="${y(b.l).toFixed(1)}" stroke="${col}" stroke-width="1.1"/>`);
+    const top=y(Math.max(b.o,b.c)), bot=y(Math.min(b.o,b.c));
+    p.push(`<rect x="${(x-cw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1.2,bot-top).toFixed(1)}" fill="${col}"/>`);
+  });
+  if(baseXs.length){
+    const cx=(Math.min(...baseXs)+Math.max(...baseXs))/2;
+    const rx=Math.max(14,(Math.max(...baseXs)-Math.min(...baseXs))/2+10);
+    p.push(`<ellipse cx="${cx.toFixed(1)}" cy="${((zt+zb)/2).toFixed(1)}" rx="${rx.toFixed(1)}" ry="${(band/2+22).toFixed(1)}" fill="none" stroke="#16233c" stroke-width="2"/>`);
+  }
+  const py=y(price);
+  p.push(`<rect x="${plotW+2}" y="${(py-9).toFixed(1)}" width="60" height="18" fill="#16233c"/>`);
+  p.push(`<text x="${plotW+7}" y="${(py+4).toFixed(1)}" font-size="11.5" fill="#ffffff" ${F}>${price.toFixed(2)}</text>`);
+  for(let k=0;k<4;k++){
+    const i=Math.min(Math.round(rows.length*k/3), rows.length-1);
+    const x=i*step+step/2, anchor = k===0?"start":k===3?"end":"middle";
+    p.push(`<text x="${x.toFixed(1)}" y="${H-7}" font-size="11.5" fill="#6b7a99" text-anchor="${anchor}" ${F}>${rows[i].t.slice(5)}</text>`);
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="daily candles with the zone drawn across">${p.join("")}</svg>`;
+}
+
+/* ------------------------------------------------------------------- cards */
+let marks = {};
+try{ marks = JSON.parse(localStorage.getItem("zone-marks")||"{}"); }catch(e){ marks = {}; }
+const saveMarks = () => { try{ localStorage.setItem("zone-marks", JSON.stringify(marks)); }catch(e){} };
+
+function cardHtml(row, minScore){
+  const z=row.zone, passed=row.total>=minScore;
+  const rr = row.rr ? row.rr.toFixed(1)+":1" : "—";
+  const lines = LINES.map(([k,lab,mx]) =>
+    `<li><span class="n">${lab}</span><span class="v">${row.parts[k]}</span><span class="m">/${mx}</span></li>`).join("");
+  const whys = LINES.map(([k,lab]) => `<li><span>${lab}</span><span>${row.why[k]}</span></li>`).join("");
+  const entry = z.touches===0 ? "Confirmation" : "Limit";
+  return `<article class="setup ${passed?"pass":"watch"}" data-id="${row.symbol}-${z.date}">
+  <header><h3>${row.symbol}</h3><span class="kind">${z.type[0].toUpperCase()+z.type.slice(1)} zone · daily</span></header>
+  <div class="split">
+    <div class="chart">${candleSvg(row.bars, z, row.target, row.price)}</div>
+    <div class="scorecard ${passed?"":"fail"}">
+      <p class="sc-title">Scorecard</p>
+      <p class="sc-num">${row.total}</p>
+      <p class="sc-out">out of 10</p>
+      <p class="sc-verdict">${passed?"TRADE":"NO TRADE"}</p>
+      <p class="sc-entry">Entry Type <b>${entry}</b></p>
+      <ul class="lines">${lines}</ul>
+      <p class="sc-foot">${z.type.toUpperCase()} ZONE</p>
+    </div>
+  </div>
+  <dl class="levels">
+    <div><dt>Last</dt><dd>${row.price.toFixed(2)}</dd></div>
+    <div><dt>Entry — zone edge</dt><dd>${z.proximal.toFixed(2)}</dd></div>
+    <div><dt>Stop — far edge</dt><dd>${z.distal.toFixed(2)}</dd></div>
+    <div><dt>Target</dt><dd>${row.target.toFixed(2)}</dd></div>
+    <div><dt>Reward:risk</dt><dd>${rr}</dd></div>
+    <div><dt>Distance</dt><dd>${row.distance.toFixed(1)}%</dd></div>
+  </dl>
+  <details class="why"><summary>Why each line scored that</summary><ul>${whys}</ul></details>
+  <p class="meta">Base formed ${z.date} · ${z.baseLen} candles · ${z.touches===0?"untouched":z.touches+" retests"} · last bar ${row.bars[row.bars.length-1].t}</p>
+</article>`;
+}
+
+function attachMarks(scope){
+  scope.querySelectorAll("article.setup").forEach(card=>{
+    const id=card.dataset.id, bar=document.createElement("div");
+    bar.className="status";
+    ["Taken","Watching","Passed"].forEach(label=>{
+      const b=document.createElement("button");
+      b.type="button"; b.textContent=label; b.dataset.mark=label.toLowerCase();
+      b.setAttribute("aria-pressed", String(marks[id]===b.dataset.mark));
+      b.onclick=()=>{
+        marks[id] = marks[id]===b.dataset.mark ? null : b.dataset.mark;
+        if(!marks[id]) delete marks[id];
+        saveMarks();
+        bar.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x.dataset.mark===marks[id])));
+      };
+      bar.appendChild(b);
+    });
+    card.appendChild(bar);
+  });
+}
+
+/* -------------------------------------------------------------------- scan */
+const $ = id => document.getElementById(id);
+
+async function runScan(){
+  const count=+$("universe").value, minScore=+$("minScore").value;
+  const topN=+$("topN").value, approach=+$("approach").value;
+  const market = $("market").value;
+  const pool = market === "crypto" ? CRYPTO
+             : market === "both"   ? TICKERS.concat(CRYPTO)
+             : TICKERS;
+  const syms = pool.slice(0, count);
+
+  $("go").disabled = true;
+  $("bar").classList.add("on");
+  $("results").innerHTML = "";
+  let done=0, failed=0;
+  const rows=[];
+
+  const queue = syms.slice();
+  async function worker(){
+    while(queue.length){
+      const sym = queue.shift();
+      try{
+        const bars = await getBars(sym);
+        const row = analyze(sym, bars, approach);
+        if(row) rows.push(row);
+      }catch(e){ failed++; }
+      done++;
+      $("barfill").style.width = (done/syms.length*100).toFixed(1)+"%";
+      $("log").textContent = `${done} of ${syms.length} pulled · ${rows.length} with a live zone` +
+        (failed ? ` · ${failed} unavailable` : "");
+    }
+  }
+  await Promise.all(Array.from({length:CFG.concurrency}, worker));
+
+  $("bar").classList.remove("on");
+  $("go").disabled = false;
+
+  if(failed === syms.length){
+    $("log").textContent = "Every request failed. The relay is probably down or blocked — " +
+      "try again in a minute, or use the Python version which talks to Yahoo directly.";
+    return;
+  }
+
+  rows.sort((a,b)=> b.total-a.total || a.distance-b.distance);
+  let hits = rows.filter(r=>r.total>=minScore);
+  if(topN) hits = hits.slice(0, topN);
+  const watch = rows.filter(r=>r.total < minScore && r.total >= minScore-2).slice(0,12);
+
+  const html = [];
+  html.push(`<h2>Scoring ${minScore} or better</h2>`);
+  html.push(hits.length ? hits.map(r=>cardHtml(r,minScore)).join("")
+    : `<p class="none">Nothing hit ${minScore} out of ${syms.length} names. That is a normal result — lower the bar or check back tomorrow.</p>`);
+  if(watch.length){
+    html.push(`<h2>Just under the line</h2><table><thead><tr><th>Symbol</th><th>Score</th><th>Zone</th><th>Entry</th><th>Distance</th><th>R:R</th></tr></thead><tbody>` +
+      watch.map(r=>`<tr><td class="sym">${r.symbol}</td><td>${r.total}/10</td><td>${r.zone.type}</td><td>${r.zone.proximal.toFixed(2)}</td><td>${r.distance.toFixed(1)}%</td><td>${r.rr?r.rr.toFixed(1)+":1":"—"}</td></tr>`).join("") +
+      `</tbody></table>`);
+  }
+  $("results").innerHTML = html.join("");
+  attachMarks($("results"));
+  $("log").textContent = `${done} scanned · ${rows.length} with a live zone · ${rows.filter(r=>r.total>=minScore).length} at ${minScore}+` + (failed?` · ${failed} unavailable`:"");
+}
+
+$("go").addEventListener("click", runScan);
+
+/* ------------------------------------------------------- connection test */
+async function testConnections(){
+  const out = document.getElementById("diagout");
+  out.style.display = "block";
+  const lines = [];
+  const say = t => { lines.push(t); out.textContent = lines.join("\n"); };
+
+  say("Where this page is running");
+  say("  address:  " + location.protocol + "//" + (location.host || "(local file)"));
+  const framed = window.self !== window.top;
+  say("  in a frame: " + (framed ? "YES — this is the usual cause of total failure" : "no"));
+  if(framed){
+    say("");
+    say("  A preview frame blocks outbound requests no matter which relay is up.");
+    say("  Download the file and open it directly in your browser instead.");
+  }
+  say("");
+
+  const probe = "https://query1.finance.yahoo.com/v8/finance/chart/MSFT?range=1mo&interval=1d";
+
+  if(location.protocol.startsWith("http")){
+    say("Your own proxy at /api/quote");
+    try{
+      const t0 = Date.now();
+      const r = await fetchWithTimeout(OWN_PROXY(probe), 15000);
+      const body = await r.text();
+      say("  " + (r.ok && body.length > 50 ? "WORKING" : "responded but unusable") +
+          " — HTTP " + r.status + ", " + body.length + " bytes, " + (Date.now()-t0) + "ms");
+    }catch(e){ say("  not deployed here (" + e.message + ") — that's fine, relays below"); }
+    say("");
+  }
+
+  say("Public relays");
+  const names = ["allorigins", "codetabs", "corsproxy"];
+  let anyOk = false;
+  for(let i = 0; i < PUBLIC_RELAYS.length; i++){
+    say("  " + names[i].padEnd(12) + "testing…");
+    lines.pop();
+    out.textContent = lines.concat(["  " + names[i].padEnd(12) + "testing…"]).join("\n");
+    try{
+      const t0 = Date.now();
+      const r = await fetchWithTimeout(PUBLIC_RELAYS[i](probe), 15000);
+      const body = await r.text();
+      const ok = r.ok && body.length > 50;
+      if(ok) anyOk = true;
+      say("  " + names[i].padEnd(12) + (ok ? "WORKING" : "unusable") +
+          " — HTTP " + r.status + ", " + body.length + " bytes, " + (Date.now()-t0) + "ms");
+    }catch(e){
+      say("  " + names[i].padEnd(12) + "FAILED — " + e.message);
+    }
+  }
+  say("");
+  say(anyOk ? "At least one route works. Hit Scan."
+            : framed ? "Everything failed, and you're in a frame. That's why — open the file directly."
+            : "Everything failed. Either the relays are down right now, or your network blocks them.\n" +
+              "Try again in a few minutes, or use zone_scanner.py, which talks to Yahoo directly.");
+}
+
+document.getElementById("diag").addEventListener("click", testConnections);
+</script>
+</body>
+</html>
