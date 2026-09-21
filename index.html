@@ -53,6 +53,18 @@ h2{font-size:15px;margin:28px 0 12px;padding-bottom:7px;border-bottom:2px solid 
 .levels{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px;margin:14px 0 0}
 .levels dt{font-size:11.5px;color:var(--soft)}
 .levels dd{margin:1px 0 0;font-size:15px;font-weight:600}
+.cautions{margin:10px 0 0;padding:11px 14px;border-radius:8px;border:1px solid var(--rule);
+border-left:4px solid #b4700a;background:var(--paper);font-size:13px;line-height:1.5}
+.cautions ul{margin:6px 0 0;padding-left:18px}
+.cautions li{margin:3px 0;color:var(--soft)}
+.planbox{margin:14px 0 0;padding:12px 14px;border-radius:8px;background:var(--paper);border:1px solid var(--rule)}
+.planline{margin:0;font-size:13.5px;line-height:1.55}
+.planline + .planline{margin-top:8px}
+.plan{margin:8px 0;padding-left:20px;font-size:13.5px;line-height:1.6}
+.plan li{margin:3px 0}
+.lv-buy{color:var(--green)}
+.lv-stop{color:var(--red)}
+.lv-target{color:var(--blue)}
 .why{margin:12px 0 0;font-size:13px}
 .why summary{cursor:pointer;color:var(--soft)}
 .why ul{list-style:none;margin:8px 0 0;padding:0}
@@ -109,6 +121,7 @@ font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom
 <nav class="tabs" id="tabs">
   <button type="button" data-tab="scan" aria-pressed="true">Scan</button>
   <button type="button" data-tab="results" aria-pressed="false">Results <span class="tabcount" id="rescount"></span></button>
+  <button type="button" data-tab="cheap" aria-pressed="false">Under $100 <span class="tabcount" id="cheapcount"></span></button>
 </nav>
 
 <section id="tab-scan">
@@ -149,6 +162,10 @@ font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom
     </select>
   </div>
   <div>
+    <label for="riskper">Risk per trade $</label>
+    <input id="riskper" type="number" step="10" inputmode="decimal" placeholder="e.g. 200">
+  </div>
+  <div>
     <label for="approach">Within % of zone</label>
     <select id="approach">
       <option value="5">5%</option>
@@ -157,6 +174,7 @@ font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom
     </select>
   </div>
   <button class="go" id="go" type="button">Scan</button>
+  <button class="go" id="stop" type="button" style="background:var(--red);display:none">Stop</button>
   <button class="go" id="diag" type="button" style="background:var(--soft)">Test connection</button>
   <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--soft);white-space:nowrap">
     <input type="checkbox" id="live" checked style="width:auto"> Live prices
@@ -200,6 +218,40 @@ font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom
 </div>
 </section>
 
+<section id="tab-cheap" hidden>
+  <div class="controls" style="margin-bottom:14px">
+    <div>
+      <label for="cheapmax">Max share price</label>
+      <select id="cheapmax">
+        <option value="25">Under $25</option>
+        <option value="50">Under $50</option>
+        <option value="100" selected>Under $100</option>
+        <option value="250">Under $250</option>
+      </select>
+    </div>
+    <div>
+      <label for="cheapmin">Minimum score</label>
+      <select id="cheapmin">
+        <option value="9">9</option>
+        <option value="8" selected>8</option>
+        <option value="7">7</option>
+        <option value="6">6</option>
+      </select>
+    </div>
+    <div>
+      <label for="cheapcount2">How many to check</label>
+      <select id="cheapcount2">
+        <option value="30">30 names</option>
+        <option value="60" selected>60 names</option>
+        <option value="120">120 names</option>
+      </select>
+    </div>
+    <button class="go" id="cheapgo" type="button">Scan cheap names</button>
+  </div>
+  <p class="log" id="cheaplog">Scans the lower-priced end of the S&amp;P 500 — same six scores, same charts. Anything that comes back over your price cap is dropped.</p>
+  <div id="results-cheap"></div>
+</section>
+
 <section id="tab-results" hidden>
   <p class="log" id="rsum"></p>
   <div id="results"></div>
@@ -241,6 +293,18 @@ async function fetchWithTimeout(url, ms){
   }
 }
 
+
+/* S&P 500 members that usually trade under about $100. Prices drift, so the
+   Max share price filter is what actually enforces it — this list just keeps
+   the scan from burning requests on names that were never going to qualify. */
+const CHEAP = ("F GM T VZ INTC PFE BAC WFC KO CSCO KEY HBAN RF CFG FITB ZION CMA SIRI " +
+"NEM FCX AA CLF X VTRS WBA CAG CPB K SJM HRL TSN KHC GIS MO BTI PARA WBD NWSA FOXA " +
+"CSX NI EVRG CNP PPL FE AES EXC AEP ES LNT ATO CMS DTE WMB OKE KMI MRO APA DVN CTRA " +
+"HAL BKR SLB HPE HPQ WDC STX JNPR FFIV NTAP LUMN FYBR GPS ANF AEO BBY M JWN KSS " +
+"LYFT PINS SNAP MTCH BMBL ZG RIVN PLUG RUN NCLH CCL AAL LUV JBLU UAL SAVE " +
+"BEN IVZ LNC UNM GL AIG HST PK VNO SLG KIM BRX REG O WY PCH IP IPG OMC NWL SPB " +
+"HOG BC PII LEG MHK XRAY VTR PEAK DOC AMCR SEE BALL CF MOS ALB EMN CE DOW LYB").split(" ");
+
 /* ------------------------------------------------------------------ config */
 const CFG = {maxBase:6, minDepartureATR:1.0, minBodyRatio:0.60, maxBaseBody:0.50,
              chartCandles:130, concurrency:4};
@@ -249,6 +313,7 @@ const CFG = {maxBase:6, minDepartureATR:1.0, minBodyRatio:0.60, maxBaseBody:0.50
    First choice is your own proxy at /api/quote — present when this folder is
    deployed to Vercel. If it isn't there (opened as a local file, or hosted
    somewhere static), it falls back to public relays automatically. */
+const YAHOO_HOSTS = ["https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"];
 const OWN_PROXY = u => "/api/quote?url=" + encodeURIComponent(u);
 const PUBLIC_RELAYS = [
   u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
@@ -259,6 +324,10 @@ const PUBLIC_RELAYS = [
 let ownProxyWorks = null;   // null = untested, true/false once we know
 let relayIdx = 0;
 let cacheHits = 0;
+const relayHealth = [0, 0, 0];     // consecutive failures per relay
+const RELAY_DEAD_AFTER = 4;
+let cancelScan = false;
+let relayAllDead = false;
 
 async function tryOwnProxy(url){
   const r = await fetchWithTimeout(OWN_PROXY(url));
@@ -289,15 +358,18 @@ async function relayFetch(url){
   let lastErr;
   for(let i=0;i<PUBLIC_RELAYS.length;i++){
     const idx = (relayIdx + i) % PUBLIC_RELAYS.length;
+    if(relayHealth[idx] >= RELAY_DEAD_AFTER) continue;   // this one is throttling us
     try{
-      const r = await fetchWithTimeout(PUBLIC_RELAYS[idx](url));
+      const r = await fetchWithTimeout(PUBLIC_RELAYS[idx](url), 8000);
       if(!r.ok) throw new Error("HTTP " + r.status);
       const text = await r.text();
       if(!text || text.length < 50) throw new Error("empty body");
+      relayHealth[idx] = 0;
       relayIdx = idx;             // stick with whichever one worked
       return text;
-    }catch(e){ lastErr = e; }
+    }catch(e){ lastErr = e; relayHealth[idx]++; }
   }
+  if(relayHealth.every(h => h >= RELAY_DEAD_AFTER)) relayAllDead = true;
   throw lastErr || new Error("all relays failed");
 }
 
@@ -431,14 +503,16 @@ function findZones(bars){
 }
 
 function nearestTarget(zone, zones, bars){
+  // You sell INTO supply at its near edge, where sellers start showing up —
+  // not at its far edge, which price would have to chew all the way through.
   const demand = zone.type==="demand";
   const opp = zones.filter(z=>z.type!==zone.type);
   const win = bars.slice(-252);
   if(demand){
-    const above = opp.filter(z=>z.distal>zone.proximal).map(z=>z.distal);
+    const above = opp.filter(z=>z.proximal>zone.proximal).map(z=>z.proximal);
     return above.length ? Math.min(...above) : Math.max(...win.map(b=>b.h));
   }
-  const below = opp.filter(z=>z.distal<zone.proximal).map(z=>z.distal);
+  const below = opp.filter(z=>z.proximal<zone.proximal).map(z=>z.proximal);
   return below.length ? Math.max(...below) : Math.min(...win.map(b=>b.l));
 }
 
@@ -513,6 +587,22 @@ function analyze(sym, bars, approachPct){
 }
 
 /* ------------------------------------------------------------------ chart */
+
+/* When no zone exists on one side, fall back to the level price actually
+   turned at — the recent swing. Drawn as a thin dotted line, clearly not a zone. */
+function impliedLevel(bars, side, price, lookback){
+  const win = bars.slice(-(lookback || 90));
+  if(!win.length) return null;
+  if(side === "demand"){
+    const lows = win.map(b => b.l).filter(v => v < price);
+    if(!lows.length) return null;
+    return Math.min(...lows);
+  }
+  const highs = win.map(b => b.h).filter(v => v > price);
+  if(!highs.length) return null;
+  return Math.max(...highs);
+}
+
 function candleSvg(bars, row, price, tall, opts){
   opts = opts || {};
   const W = 900, H = tall ? 560 : 400;
@@ -576,9 +666,34 @@ function candleSvg(bars, row, price, tall, opts){
   if(opts.tfBands){
     tfBand(opts.tfBands.demand, "demand", opts.tfBands.label);
     tfBand(opts.tfBands.supply, "supply", opts.tfBands.label);
+    if(!opts.tfBands.demand || !opts.tfBands.supply){
+      const side = opts.tfBands.demand ? "supply" : "demand";
+      const col = side === "demand" ? "#0f6e56" : "#993c1d";
+      const v = impliedLevel(rows, side, price, 60);
+      if(v != null && v >= lo && v <= hi){
+        const ly = y(v);
+        p.push(`<line x1="0" y1="${ly.toFixed(1)}" x2="${plotW}" y2="${ly.toFixed(1)}" stroke="${col}" stroke-width="1.2" stroke-dasharray="2 5"/>`);
+        p.push(`<text x="${plotW-8}" y="${(side === "demand" ? ly + 14 : ly - 5).toFixed(1)}" font-size="12" font-weight="600" fill="${col}" text-anchor="end" ${F}>` +
+               `${opts.tfBands.label} ${side === "demand" ? "low" : "high"} ${v.toFixed(2)}</text>`);
+      }
+    }
   }
   if(!dz && prim.type === "demand") band(prim, "demand");
   if(!sz && prim.type === "supply") band(prim, "supply");
+
+  function impliedLine(side){
+    const col = side === "demand" ? "#17924c" : "#c0392b";
+    const v = impliedLevel(rows, side, price);
+    if(v == null || v < lo || v > hi) return;
+    const ly = y(v);
+    p.push(`<line x1="0" y1="${ly.toFixed(1)}" x2="${plotW}" y2="${ly.toFixed(1)}" stroke="${col}" stroke-width="1.3" stroke-dasharray="2 4" opacity="0.9"/>`);
+    p.push(`<text x="10" y="${(side === "demand" ? ly + 14 : ly - 5).toFixed(1)}" font-size="12" font-weight="600" fill="${col}" ${F}>` +
+           `${side === "demand" ? "Low" : "High"} ${v.toFixed(2)} — no zone here yet</text>`);
+  }
+  const haveDemand = dz || (prim.type === "demand");
+  const haveSupply = sz || (prim.type === "supply");
+  if(!haveDemand) impliedLine("demand");
+  if(!haveSupply) impliedLine("supply");
 
   if(row.target && !(prim.type === "demand" ? sz : dz)){
     const ty = y(row.target);
@@ -639,6 +754,78 @@ function candleSvg(bars, row, price, tall, opts){
          `<rect class="xhit" x="0" y="0" width="${plotW}" height="${H-PADB}" fill="transparent"/></svg>`;
 }
 
+
+
+/* The score measures how well a setup matches the rules. These are the things
+   the rules don't catch — shown on the card so a 9 can't hide them. */
+function cautionsFor(row){
+  const out = [], z = row.zone, price = row.price;
+  const demand = z.type === "demand";
+
+  if(z.baseLen <= 1)
+    out.push(`The base is a single candle, so the zone is only ${Math.abs(z.proximal-z.distal).toFixed(2)} wide. A normal day's noise can take out that stop.`);
+
+  if(row.parts && row.parts.trend <= 1)
+    out.push("The daily trend isn't fully behind this — you'd be buying into a market that isn't trending your way.");
+
+  const opp = demand ? (row.bands && row.bands.supply) : (row.bands && row.bands.demand);
+  if(opp){
+    const gap = demand ? (opp.proximal - price)/price*100 : (price - opp.proximal)/price*100;
+    if(gap > 0 && gap < 3)
+      out.push(`There's ${demand ? "supply" : "demand"} at ${opp.proximal.toFixed(2)}, only ${gap.toFixed(1)}% away. Price has to get through that first.`);
+  }
+
+  if(row.rr && row.rr > 5)
+    out.push(`${row.rr.toFixed(1)}:1 looks generous because the stop is tight, not because the target is easy. Tight stops get hit.`);
+
+  if(row.distance > 5)
+    out.push(`Price is ${row.distance.toFixed(1)}% away from the entry. It may never get there, and plenty can change before it does.`);
+
+  return out;
+}
+
+/* ------------------------------------------------------- plain-English plan */
+function riskBudget(){
+  const v = parseFloat(localStorage.getItem("zone-risk") || "");
+  return isFinite(v) && v > 0 ? v : null;
+}
+
+function planFor(row){
+  const z = row.zone, price = row.price;
+  const demand = z.type === "demand";
+  const entry = z.proximal, stop = z.distal, target = row.target;
+  const risk = Math.abs(entry - stop);
+  const reward = Math.abs(target - entry);
+  const riskPct = entry ? risk/entry*100 : 0;
+  const rewardPct = entry ? reward/entry*100 : 0;
+  const rr = risk > 0 ? reward/risk : 0;
+  const budget = riskBudget();
+  const shares = budget && risk > 0 ? Math.floor(budget/risk) : null;
+  const inside = demand ? (price <= entry && price >= stop) : (price >= entry && price <= stop);
+  const money = n => "$" + n.toFixed(2);
+
+  if(!demand){
+    return `<p class="planline"><b>This is a sell zone, not a buy.</b> Price is ${money(price)}, ` +
+      `${row.distance.toFixed(1)}% below ${money(entry)} — the level where sellers took over last time. ` +
+      `If you already hold this, that's where to take profit. If you don't, there's nothing to do here ` +
+      `except wait for a demand zone below.</p>`;
+  }
+
+  const lead = inside
+    ? `<b>Price is in the buy zone right now</b> (${money(stop)}–${money(entry)}).`
+    : `Price is ${money(price)}, <b>${row.distance.toFixed(1)}% above the buy zone</b>. Nothing to do until it falls to ${money(entry)}.`;
+
+  return `<p class="planline">${lead}</p>
+  <ol class="plan">
+    <li><b>Buy at ${money(entry)}</b> — the top edge of the zone${inside ? ", which price has already reached" : ""}.</li>
+    <li><b>Get out at ${money(stop)}</b> if it keeps dropping. That's the bottom of the zone — below it, the zone failed. Costs you ${money(risk)} a share, ${riskPct.toFixed(1)}%.</li>
+    <li><b>Take profit at ${money(target)}</b>, the next zone above where sellers wait. Worth ${money(reward)} a share, ${rewardPct.toFixed(1)}%.</li>
+  </ol>
+  <p class="planline">So you risk ${money(risk)} to make ${money(reward)} — <b>${rr.toFixed(1)} to 1</b>.` +
+  (shares ? ` Risking ${money(budget)} total means <b>${shares} shares</b> (${money(shares*entry)} of stock).` : "") +
+  `</p>`;
+}
+
 /* ------------------------------------------------------------------- cards */
 let marks = {};
 try{ marks = JSON.parse(localStorage.getItem("zone-marks")||"{}"); }catch(e){ marks = {}; }
@@ -665,13 +852,15 @@ function cardHtml(row, minScore){
       <p class="sc-foot">${z.type.toUpperCase()} ZONE</p>
     </div>
   </div>
+  <div class="planbox">${planFor(row)}</div>
+  ${(() => { const c = cautionsFor(row); return c.length ? `<div class="cautions"><b>Before you act on that score:</b><ul>${c.map(x=>`<li>${x}</li>`).join("")}</ul></div>` : ""; })()}
   <dl class="levels">
-    <div><dt>Last</dt><dd>${row.price.toFixed(2)}</dd></div>
-    <div><dt>Entry — zone edge</dt><dd>${z.proximal.toFixed(2)}</dd></div>
-    <div><dt>Stop — far edge</dt><dd>${z.distal.toFixed(2)}</dd></div>
-    <div><dt>Target</dt><dd>${row.target.toFixed(2)}</dd></div>
-    <div><dt>Reward:risk</dt><dd>${rr}</dd></div>
-    <div><dt>Distance</dt><dd>${row.distance.toFixed(1)}%</dd></div>
+    <div><dt>Trading now at</dt><dd>${row.price.toFixed(2)}</dd></div>
+    <div><dt>Buy at</dt><dd class="lv-buy">${z.proximal.toFixed(2)}</dd></div>
+    <div><dt>Get out at</dt><dd class="lv-stop">${z.distal.toFixed(2)}</dd></div>
+    <div><dt>Take profit at</dt><dd class="lv-target">${row.target.toFixed(2)}</dd></div>
+    <div><dt>Risk per share</dt><dd>${Math.abs(z.proximal - z.distal).toFixed(2)}</dd></div>
+    <div><dt>Makes this much per $1 risked</dt><dd>${rr}</dd></div>
   </dl>
   <details class="why"><summary>Why each line scored that</summary><ul>${whys}</ul></details>
   <p class="meta">Base formed ${z.date} · ${z.baseLen} candles · ${z.touches===0?"untouched":z.touches+" retests"} · last bar ${row.bars[row.bars.length-1].t}</p>
@@ -710,15 +899,35 @@ const TFS = [
 ];
 const seriesCache = new Map();
 
+const COARSER = {"5m":"15m", "15m":"30m", "30m":"1h", "1h":"1d", "1d":"1d"};
+
 async function loadSeries(sym, tf){
   const key = sym + "|" + tf.id;
   const hit = seriesCache.get(key);
   if(hit && Date.now() - hit.at < 25000) return hit.bars;
-  const url = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(sym) +
-              "?range=" + tf.range + "&interval=" + tf.interval;
-  const bars = parseYahoo(JSON.parse(await relayFetch(url)));
-  seriesCache.set(key, {at: Date.now(), bars});
-  return bars;
+
+  // Yahoo sometimes answers 401 for one host or one interval; walk the options.
+  const attempts = [];
+  for(const host of YAHOO_HOSTS){
+    attempts.push({host, interval: tf.interval});
+  }
+  const coarse = COARSER[tf.interval];
+  if(coarse && coarse !== tf.interval) attempts.push({host: YAHOO_HOSTS[0], interval: coarse});
+
+  let lastErr;
+  for(const a of attempts){
+    try{
+      const url = a.host + "/v8/finance/chart/" + encodeURIComponent(sym) +
+                  "?range=" + tf.range + "&interval=" + a.interval;
+      const bars = parseYahoo(JSON.parse(await relayFetch(url)));
+      if(bars.length > 5){
+        seriesCache.set(key, {at: Date.now(), bars});
+        return bars;
+      }
+      lastErr = new Error("no bars");
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("no data");
 }
 
 function barLabel(b, intraday){
@@ -819,19 +1028,22 @@ async function drawTF(card, tfId){
       const bits = [];
       if(tfz.dScore){
         const d = tfz.dScore, gap = (px - d.zone.proximal)/px*100;
-        bits.push(`<span><b style="color:var(--green)">${tf.label} demand</b> ${d.zone.proximal.toFixed(2)}–${d.zone.distal.toFixed(2)} · ${d.total}/10 · ${gap.toFixed(1)}% below`);
+        bits.push(`<span><b style="color:var(--green)">${tf.label} demand</b> ${d.zone.proximal.toFixed(2)}–${d.zone.distal.toFixed(2)} · ${d.total}/10 · ${gap.toFixed(1)}% below</span>`);
       }
       if(tfz.sScore){
         const v = tfz.sScore, gap = (v.zone.proximal - px)/px*100;
-        bits.push(`<span><b style="color:var(--red)">${tf.label} supply</b> ${v.zone.proximal.toFixed(2)}–${v.zone.distal.toFixed(2)} · ${v.total}/10 · ${gap.toFixed(1)}% above`);
+        bits.push(`<span><b style="color:var(--red)">${tf.label} supply</b> ${v.zone.proximal.toFixed(2)}–${v.zone.distal.toFixed(2)} · ${v.total}/10 · ${gap.toFixed(1)}% above</span>`);
       }
       info.innerHTML = bits.join("") + `<span style="opacity:.75">Solid bands are the daily zones · dashed are ${tf.label}</span>`;
     }else{
       info.textContent = "No clean zone on this timeframe — the solid bands are the daily ones.";
     }
   }catch(e){
+    const old = chart.querySelector(".tferr");
+    if(old) old.remove();
     chart.insertAdjacentHTML("beforeend",
-      `<p class="meta">Couldn't load ${tf.label} — ${e.message}</p>`);
+      `<p class="meta tferr">Couldn't load ${tf.label} — ${e.message}. ` +
+      `Yahoo throttles intraday harder than daily; try again in a moment or pick a longer timeframe.</p>`);
   }
   chart.style.opacity = "1";
 }
@@ -1215,9 +1427,18 @@ async function refreshOne(id){
       pill.textContent = (st ? LABEL[st] + " " : row.distance.toFixed(1) + "% away ") + "· " + stamp;
       pill.style.cssText = "font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;color:#fff;" +
         "background:" + (st ? TINT[st] : "var(--soft)");
-    }catch(e){ /* one symbol failing shouldn't stop the rest */ }
+    }catch(e){
+      const card = document.querySelector(`article[data-id="${id}"]`);
+      if(card){
+        let pill = card.querySelector(".livepill");
+        if(pill){ pill.textContent = "no quote · " + stamp; pill.style.background = "var(--soft)"; }
+      }
+      throw e;
+    }
   }
 }
+
+const symCooldown = new Map();      // symbol -> time to stop skipping it
 
 async function refreshLive(){
   if(!$("live").checked || !liveRows.size) return;
@@ -1226,13 +1447,31 @@ async function refreshLive(){
     const c = document.querySelector(`article[data-id="${id}"]`);
     return c && c.classList.contains("expanded");
   });
-  // an opened card refreshes every tick; the rest every other tick
   tick++;
-  const due = expanded.length ? expanded.concat(tick % 2 === 0 ? ids.filter(i => !expanded.includes(i)) : []) : ids;
-  for(const id of due){
-    await refreshOne(id);
-    await new Promise(r => setTimeout(r, 350));
-  }
+  let due = expanded.length
+    ? expanded.concat(tick % 2 === 0 ? ids.filter(i => !expanded.includes(i)) : [])
+    : ids;
+  const now = Date.now();
+  due = due.filter(id => {
+    const sym = (liveRows.get(id) || {}).symbol;
+    const until = symCooldown.get(sym);
+    return !(until && until > now);
+  });
+
+  // three at a time — one slow symbol no longer holds up the rest
+  const queue = due.slice();
+  const workers = Array.from({length: Math.min(3, queue.length)}, async () => {
+    while(queue.length){
+      const id = queue.shift();
+      try{
+        await refreshOne(id);
+      }catch(e){
+        const sym = (liveRows.get(id) || {}).symbol;
+        if(sym) symCooldown.set(sym, Date.now() + 5*60*1000);   // rest it for 5 minutes
+      }
+    }
+  });
+  await Promise.all(workers);
 }
 
 function startLive(){
@@ -1245,21 +1484,37 @@ function startLive(){
 /* -------------------------------------------------------------------- scan */
 const $ = id => document.getElementById(id);
 
-async function runScan(){
-  const count=+$("universe").value, minScore=+$("minScore").value;
-  const topN=+$("topN").value, approach=+$("approach").value;
-  const market = $("market").value;
-  const pool = market === "crypto" ? CRYPTO
-             : market === "both"   ? TICKERS.concat(CRYPTO)
-             : TICKERS;
-  const syms = pool.slice(0, count);
+async function runScan(cfg){
+  cfg = cfg || {};
+  const minScore = cfg.minScore != null ? cfg.minScore : +$("minScore").value;
+  const topN = cfg.topN != null ? cfg.topN : +$("topN").value;
+  const approach = cfg.approach != null ? cfg.approach : +$("approach").value;
+  const maxPrice = cfg.maxPrice || null;
+  const outEl = cfg.out || "results";
+  const logEl = cfg.log || "log";
+  const tabName = cfg.tab || "results";
+  const badgeEl = cfg.badge || "rescount";
+  let syms;
+  if(cfg.pool){
+    syms = cfg.pool.slice(0, cfg.count || cfg.pool.length);
+  }else{
+    const count = +$("universe").value, market = $("market").value;
+    const pool = market === "crypto" ? CRYPTO
+               : market === "both"   ? TICKERS.concat(CRYPTO)
+               : TICKERS;
+    syms = pool.slice(0, count);
+  }
 
-  $("go").disabled = true;
+  $(cfg.button || "go").disabled = true;
+  cancelScan = false;
+  relayAllDead = false;
+  relayHealth.fill(0);
+  $("stop").style.display = "inline-block";
   $("bar").classList.add("on");
-  $("results").innerHTML = "";
+  $(outEl).innerHTML = "";
   const dg = document.getElementById("diagout");
   if(dg){ dg.style.display = "none"; dg.textContent = ""; }
-  let done=0, failed=0;
+  let done=0, failed=0, warned=false;
   cacheHits = 0;
   const started = Date.now();
   const rows=[];
@@ -1267,6 +1522,14 @@ async function runScan(){
   const queue = syms.slice();
   async function worker(){
     while(queue.length){
+      if(cancelScan) return;
+      if(relayAllDead){
+        cancelScan = true;
+        $("source").innerHTML = `<b style="color:${COLORS.sell}">Every relay is refusing requests.</b> ` +
+          `They rate limit by IP, so a big scan trips them. Wait a few minutes and try 25 names, ` +
+          `or deploy the site/ folder to Vercel — your own proxy has no such limit.`;
+        return;
+      }
       const sym = queue.shift();
       try{
         const bars = await getBars(sym);
@@ -1278,10 +1541,17 @@ async function runScan(){
       const secs = (Date.now()-started)/1000;
       const rate = done/Math.max(1,secs);
       const left = Math.round((syms.length-done)/Math.max(0.05,rate));
-      $("log").textContent = `${done} of ${syms.length} pulled · ${rows.length} with a live zone` +
+      const failRate = done ? failed/done : 0;
+      $(logEl).textContent = `${done} of ${syms.length} pulled · ${rows.length} with a live zone` +
         (cacheHits ? ` · ${cacheHits} from cache` : "") +
         (failed ? ` · ${failed} unavailable` : "") +
-        (done < syms.length ? ` · about ${left}s left` : "");
+        (done < syms.length ? ` · about ${left < 90 ? left + "s" : Math.round(left/60) + " min"} left` : "");
+      if(failRate > 0.3 && done >= 12 && !warned){
+        warned = true;
+        $("source").innerHTML = `<b style="color:${COLORS.protect}">The public relay is rate limiting you</b> — ` +
+          `${Math.round(failRate*100)}% of requests are failing. Stop, drop the universe to 25 or 50, ` +
+          `or deploy the site/ folder to Vercel and it uses your own proxy instead.`;
+      }
     }
   }
   // own proxy can take more parallel load than a public relay
@@ -1289,21 +1559,26 @@ async function runScan(){
   await Promise.all(Array.from({length:workers}, worker));
 
   $("bar").classList.remove("on");
-  $("go").disabled = false;
+  $(cfg.button || "go").disabled = false;
+  $("stop").style.display = "none";
 
+  if(cancelScan && rows.length === 0){ return; }
   if(failed === syms.length){
-    $("log").textContent = "Every request failed. The relay is probably down or blocked — " +
+    $(logEl).textContent = "Every request failed. The relay is probably down or blocked — " +
       "try again in a minute, or use the Python version which talks to Yahoo directly.";
     return;
   }
 
   rows.sort((a,b)=> b.total-a.total || a.distance-b.distance);
-  let hits = rows.filter(r=>r.total>=minScore);
+  const priced = maxPrice ? rows.filter(r => r.price <= maxPrice) : rows;
+  const droppedByPrice = rows.length - priced.length;
+  let hits = priced.filter(r=>r.total>=minScore);
   if(topN) hits = hits.slice(0, topN);
-  const watch = rows.filter(r=>r.total < minScore && r.total >= minScore-2).slice(0,12);
+  const watch = priced.filter(r=>r.total < minScore && r.total >= minScore-2).slice(0,12);
 
   const html = [];
-  html.push(`<h2>Scoring ${minScore} or better</h2>`);
+  html.push(`<h2>Scoring ${minScore} or better${maxPrice ? ` · under $${maxPrice} a share` : ""}</h2>`);
+  if(droppedByPrice) html.push(`<p class="none">${droppedByPrice} other setup${droppedByPrice===1?"":"s"} scored well but cost more than $${maxPrice} a share.</p>`);
   html.push(hits.length ? hits.map(r=>cardHtml(r,minScore)).join("")
     : `<p class="none">Nothing hit ${minScore} out of ${syms.length} names. That is a normal result — lower the bar or check back tomorrow.</p>`);
   if(watch.length){
@@ -1311,22 +1586,22 @@ async function runScan(){
       watch.map(r=>`<tr><td class="sym">${r.symbol}</td><td>${r.total}/10</td><td>${r.zone.type}</td><td>${r.zone.proximal.toFixed(2)}</td><td>${r.distance.toFixed(1)}%</td><td>${r.rr?r.rr.toFixed(1)+":1":"—"}</td></tr>`).join("") +
       `</tbody></table>`);
   }
-  $("results").innerHTML = html.join("");
-  attachMarks($("results"));
-  attachExpand($("results"));
+  $(outEl).innerHTML = html.join("");
+  attachMarks($(outEl));
+  attachExpand($(outEl));
   liveRows.clear();
   hits.forEach(r => liveRows.set(r.symbol + "-" + r.zone.date, r));
   paintScanList(hits);
   refreshSidebarQuotes();
   startLive();
-  const badge = $("rescount");
+  const badge = $(badgeEl);
   badge.textContent = hits.length;
   badge.classList.toggle("on", hits.length > 0);
-  $("rsum").textContent = `${done} scanned · ${hits.length} at ${minScore}+ · ` +
+  if($("rsum")) $("rsum").textContent = `${done} scanned · ${hits.length} at ${minScore}+ · ` +
     `${market === "crypto" ? "crypto" : market === "both" ? "stocks and crypto" : "S&P 500"} · ` +
     new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-  if(hits.length) showTab("results");
-  $("log").textContent = `${done} scanned · ${rows.length} with a live zone · ${rows.filter(r=>r.total>=minScore).length} at ${minScore}+` + (failed?` · ${failed} unavailable`:"");
+  if(hits.length) showTab(tabName);
+  $(logEl).textContent = `${done} scanned · ${rows.length} with a live zone · ${rows.filter(r=>r.total>=minScore).length} at ${minScore}+` + (failed?` · ${failed} unavailable`:"") + (maxPrice?` · price cap $${maxPrice}`:"");
 }
 
 
@@ -1460,8 +1735,8 @@ async function scanOne(sym){
     liveRows.set(row.symbol + "-" + row.zone.date, row);
     $("results").insertAdjacentHTML("afterbegin", cardHtml(row, +$("minScore").value));
     showTab("results");
-    attachMarks($("results"));
-    attachExpand($("results"));
+    attachMarks($(outEl));
+    attachExpand($(outEl));
     log.textContent = sym + " added — scored " + row.total + "/10.";
     refreshOne(row.symbol + "-" + row.zone.date);
   }catch(e){
@@ -1474,6 +1749,7 @@ function showTab(name){
     b.setAttribute("aria-pressed", String(b.dataset.tab === name)));
   $("tab-scan").hidden = name !== "scan";
   $("tab-results").hidden = name !== "results";
+  $("tab-cheap").hidden = name !== "cheap";
   window.scrollTo({top:0, behavior:"smooth"});
 }
 $("tabs").addEventListener("click", e => {
@@ -1482,6 +1758,24 @@ $("tabs").addEventListener("click", e => {
 });
 
 $("go").addEventListener("click", runScan);
+$("cheapgo").addEventListener("click", () => runScan({
+  pool: CHEAP,
+  count: +$("cheapcount2").value,
+  minScore: +$("cheapmin").value,
+  maxPrice: +$("cheapmax").value,
+  topN: 0,
+  approach: +$("approach").value,
+  out: "results-cheap",
+  log: "cheaplog",
+  tab: "cheap",
+  badge: "cheapcount",
+  button: "cheapgo",
+}));
+
+$("stop").addEventListener("click", () => {
+  cancelScan = true;
+  $("log").textContent = "Stopped. Results so far are on the Results tab.";
+});
 $("live").addEventListener("change", startLive);
 $("notify").addEventListener("click", async () => {
   const ok = await askNotify();
@@ -1494,6 +1788,13 @@ $("notify").addEventListener("click", async () => {
   if(dl) TICKERS.concat(CRYPTO).forEach(t => {
     const o = document.createElement("option"); o.value = t; dl.appendChild(o);
   });
+  const rp = $("riskper");
+  if(rp){
+    rp.value = localStorage.getItem("zone-risk") || "";
+    rp.addEventListener("change", () => {
+      try{ localStorage.setItem("zone-risk", rp.value); }catch(e){}
+    });
+  }
   paintWatchlist();
   paintAlertFeed();
   loadTrending();
